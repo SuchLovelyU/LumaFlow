@@ -16,7 +16,7 @@ object MockCatalog {
         ledCount = 8,
         batteryPercent = 86,
         isCharging = false,
-        connectionStatus = ConnectionStatus.Connected,
+        connectionStatus = ConnectionStatus.Offline,
     )
 
     val effects = listOf(

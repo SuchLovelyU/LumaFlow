@@ -5,8 +5,10 @@ import com.example.rgbcontrller.domain.model.Keyframe
 import com.example.rgbcontrller.domain.model.LightEffect
 import com.example.rgbcontrller.domain.model.LightSessionState
 import com.example.rgbcontrller.domain.model.LiveControl
+import com.example.rgbcontrller.domain.model.RgbColor
 import com.example.rgbcontrller.domain.model.SensorMode
 import com.example.rgbcontrller.domain.model.SensorSnapshot
+import com.example.rgbcontrller.data.bluetooth.BluetoothDeviceCandidate
 import kotlinx.coroutines.flow.StateFlow
 
 interface LightRepository {
@@ -19,6 +21,12 @@ interface LightRepository {
 
 interface DeviceRepository {
     val device: StateFlow<DeviceInfo>
+    val discoveredDevices: StateFlow<List<BluetoothDeviceCandidate>>
+    val statusMessage: StateFlow<String?>
+    fun scan()
+    fun connect(deviceAddress: String)
+    fun disconnect()
+    fun sendAll(color: RgbColor, brightness: Float)
 }
 
 interface EffectRepository {

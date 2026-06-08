@@ -26,7 +26,7 @@ class LightEngine {
             LedPixel(
                 id = index,
                 color = color,
-                brightness = brightness.coerceIn(0.05f, 1f),
+                brightness = brightness.coerceIn(0f, 1f),
                 glowIntensity = (brightness * 1.25f).coerceIn(0f, 1f),
                 animationPhase = phase,
             )

@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,15 +24,39 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rgbcontrller.data.mock.AppContainer
+import com.example.rgbcontrller.domain.model.ConnectionStatus
+import com.example.rgbcontrller.domain.model.RgbColor
 import com.example.rgbcontrller.domain.repository.DeviceRepository
 import com.example.rgbcontrller.presentation.ui.components.AuroraBackground
 import com.example.rgbcontrller.presentation.ui.components.DeviceStatusHeader
 import com.example.rgbcontrller.presentation.ui.components.PageTitle
 
 class DeviceViewModel(
-    deviceRepository: DeviceRepository = AppContainer.deviceRepository,
+    private val deviceRepository: DeviceRepository = AppContainer.deviceRepository,
 ) : ViewModel() {
     val device = deviceRepository.device
+    val discoveredDevices = deviceRepository.discoveredDevices
+    val statusMessage = deviceRepository.statusMessage
+
+    fun scan() {
+        deviceRepository.scan()
+    }
+
+    fun connect(address: String) {
+        deviceRepository.connect(address)
+    }
+
+    fun disconnect() {
+        deviceRepository.disconnect()
+    }
+
+    fun sendRedTest() {
+        deviceRepository.sendAll(RgbColor(255, 0, 0), 0.5f)
+    }
+
+    fun turnOff() {
+        deviceRepository.sendAll(RgbColor(0, 0, 0), 0f)
+    }
 }
 
 @Composable
@@ -39,6 +66,8 @@ fun DeviceScreen(
     viewModel: DeviceViewModel = viewModel(),
 ) {
     val device by viewModel.device.collectAsState()
+    val devices by viewModel.discoveredDevices.collectAsState()
+    val statusMessage by viewModel.statusMessage.collectAsState()
     AuroraBackground(modifier.fillMaxSize()) {
         Scaffold(containerColor = androidx.compose.ui.graphics.Color.Transparent) { padding ->
             LazyColumn(
@@ -47,7 +76,7 @@ fun DeviceScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 item {
-                    PageTitle("Device", "Mock hardware profile and future Bluetooth boundary")
+                    PageTitle("Device", "Connect the 2x4 WS2812 Bluetooth controller")
                 }
                 item {
                     DeviceStatusHeader(device, onClick = onOpenSettings)
@@ -59,7 +88,67 @@ fun DeviceScreen(
                             InfoRow("Firmware", device.firmwareVersion)
                             InfoRow("LED count", "${device.ledCount}")
                             InfoRow("Battery", "${device.batteryPercent}%")
-                            InfoRow("BluetoothService", "Reserved interface, not implemented")
+                            InfoRow("Bluetooth", device.connectionStatus.name)
+                            statusMessage?.let {
+                                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+                item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(modifier = Modifier.weight(1f), onClick = viewModel::scan) {
+                            Text("Scan")
+                        }
+                        OutlinedButton(modifier = Modifier.weight(1f), onClick = viewModel::disconnect) {
+                            Text("Disconnect")
+                        }
+                    }
+                }
+                item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            enabled = device.connectionStatus == ConnectionStatus.Connected,
+                            onClick = viewModel::sendRedTest,
+                        ) {
+                            Text("Test red")
+                        }
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            enabled = device.connectionStatus == ConnectionStatus.Connected,
+                            onClick = viewModel::turnOff,
+                        ) {
+                            Text("Lights off")
+                        }
+                    }
+                }
+                item {
+                    Text("Bluetooth devices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                }
+                if (devices.isEmpty()) {
+                    item {
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Text(
+                                "Tap Scan. Paired UART modules will appear first.",
+                                modifier = Modifier.padding(18.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                } else {
+                    items(devices, key = { it.address }) { bluetoothDevice ->
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                InfoRow(bluetoothDevice.name ?: "Unknown device", bluetoothDevice.address)
+                                InfoRow("Pairing", if (bluetoothDevice.isBonded) "Paired" else "Discovered")
+                                Button(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = { viewModel.connect(bluetoothDevice.address) },
+                                ) {
+                                    Text("Connect")
+                                }
+                            }
                         }
                     }
                 }
