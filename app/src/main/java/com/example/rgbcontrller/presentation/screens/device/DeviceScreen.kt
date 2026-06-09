@@ -4,13 +4,25 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -61,6 +73,7 @@ class DeviceViewModel(
 
 @Composable
 fun DeviceScreen(
+    onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DeviceViewModel = viewModel(),
@@ -68,6 +81,8 @@ fun DeviceScreen(
     val device by viewModel.device.collectAsState()
     val devices by viewModel.discoveredDevices.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+    val isSearching = device.connectionStatus == ConnectionStatus.Searching
+    val isConnected = device.connectionStatus == ConnectionStatus.Connected
     AuroraBackground(modifier.fillMaxSize()) {
         Scaffold(containerColor = androidx.compose.ui.graphics.Color.Transparent) { padding ->
             LazyColumn(
@@ -76,7 +91,16 @@ fun DeviceScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 item {
-                    PageTitle("Device", "Connect the 2x4 WS2812 Bluetooth controller")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                        PageTitle(
+                            title = "Device",
+                            modifier = Modifier.weight(1f),
+                            subtitle = "Connect the 2x4 WS2812 Bluetooth controller",
+                        )
+                    }
                 }
                 item {
                     DeviceStatusHeader(device, onClick = onOpenSettings)
@@ -97,10 +121,29 @@ fun DeviceScreen(
                 }
                 item {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(modifier = Modifier.weight(1f), onClick = viewModel::scan) {
-                            Text("Scan")
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSearching,
+                            onClick = viewModel::scan,
+                        ) {
+                            if (isSearching) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Filled.Search, contentDescription = null)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (isSearching) "Scanning" else "Scan")
                         }
-                        OutlinedButton(modifier = Modifier.weight(1f), onClick = viewModel::disconnect) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            enabled = isConnected,
+                            onClick = viewModel::disconnect,
+                        ) {
+                            Icon(Icons.Filled.LinkOff, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
                             Text("Disconnect")
                         }
                     }
@@ -109,16 +152,20 @@ fun DeviceScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
                             modifier = Modifier.weight(1f),
-                            enabled = device.connectionStatus == ConnectionStatus.Connected,
+                            enabled = isConnected,
                             onClick = viewModel::sendRedTest,
                         ) {
+                            Icon(Icons.Filled.FlashOn, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
                             Text("Test red")
                         }
                         OutlinedButton(
                             modifier = Modifier.weight(1f),
-                            enabled = device.connectionStatus == ConnectionStatus.Connected,
+                            enabled = isConnected,
                             onClick = viewModel::turnOff,
                         ) {
+                            Icon(Icons.Filled.PowerSettingsNew, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
                             Text("Lights off")
                         }
                     }
@@ -144,6 +191,7 @@ fun DeviceScreen(
                                 InfoRow("Pairing", if (bluetoothDevice.isBonded) "Paired" else "Discovered")
                                 Button(
                                     modifier = Modifier.fillMaxWidth(),
+                                    enabled = !isSearching,
                                     onClick = { viewModel.connect(bluetoothDevice.address) },
                                 ) {
                                     Text("Connect")

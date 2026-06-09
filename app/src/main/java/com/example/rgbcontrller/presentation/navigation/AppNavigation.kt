@@ -3,12 +3,22 @@ package com.example.rgbcontrller.presentation.navigation
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -26,20 +36,21 @@ import com.example.rgbcontrller.presentation.screens.sensors.SensorModeDetailScr
 import com.example.rgbcontrller.presentation.screens.sensors.SensorModesScreen
 import com.example.rgbcontrller.presentation.screens.settings.SettingsScreen
 
-sealed class AppDestination(val route: String, val label: String, val icon: String) {
-    data object Dashboard : AppDestination("dashboard", "Home", "H")
-    data object Effects : AppDestination("effects", "Effects", "FX")
-    data object Live : AppDestination("live", "Live", "L")
-    data object Sensors : AppDestination("sensors", "Sensors", "S")
-    data object Editor : AppDestination("editor", "Editor", "E")
-    data object Device : AppDestination("device", "Device", "D")
-    data object Settings : AppDestination("settings", "Settings", "ST")
+sealed class AppDestination(val route: String, val label: String, val icon: ImageVector) {
+    data object Dashboard : AppDestination("dashboard", "Home", Icons.Filled.Home)
+    data object Effects : AppDestination("effects", "Effects", Icons.Filled.AutoAwesome)
+    data object Live : AppDestination("live", "Live", Icons.Filled.GraphicEq)
+    data object Sensors : AppDestination("sensors", "Sensors", Icons.Filled.Sensors)
+    data object Editor : AppDestination("editor", "Editor", Icons.Filled.Edit)
 
-    data object EffectDetail : AppDestination("effect/{effectId}", "Effect", "FX") {
+    data object Device : AppDestination("device", "Device", Icons.Filled.Bluetooth)
+    data object Settings : AppDestination("settings", "Settings", Icons.Filled.Settings)
+
+    data object EffectDetail : AppDestination("effect/{effectId}", "Effect", Icons.Filled.AutoAwesome) {
         fun createRoute(effectId: String) = "effect/$effectId"
     }
 
-    data object SensorDetail : AppDestination("sensor/{modeId}", "Sensor", "S") {
+    data object SensorDetail : AppDestination("sensor/{modeId}", "Sensor", Icons.Filled.Sensors) {
         fun createRoute(modeId: String) = "sensor/$modeId"
     }
 }
@@ -60,16 +71,17 @@ fun LightDeckApp(modifier: Modifier = Modifier) {
         bottomBar = {
             LightDeckBottomBar(navController)
         },
-    ) { _ ->
-        AppNavGraph(navController = navController)
+    ) { padding ->
+        AppNavGraph(navController = navController, modifier = Modifier.padding(padding))
     }
 }
 
 @Composable
-fun AppNavGraph(navController: NavHostController) {
+fun AppNavGraph(navController: NavHostController, modifier: Modifier = Modifier) {
     NavHost(
         navController = navController,
         startDestination = AppDestination.Dashboard.route,
+        modifier = modifier,
         enterTransition = {
             slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(280))
         },
@@ -99,10 +111,13 @@ fun AppNavGraph(navController: NavHostController) {
             EditorScreen()
         }
         composable(AppDestination.Device.route) {
-            DeviceScreen(onOpenSettings = { navController.navigate(AppDestination.Settings.route) })
+            DeviceScreen(
+                onBack = { navController.popBackStack() },
+                onOpenSettings = { navController.navigate(AppDestination.Settings.route) },
+            )
         }
         composable(AppDestination.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
         composable(AppDestination.EffectDetail.route) { entry ->
             val effectId = entry.arguments?.getString("effectId").orEmpty()
@@ -110,7 +125,7 @@ fun AppNavGraph(navController: NavHostController) {
         }
         composable(AppDestination.SensorDetail.route) { entry ->
             val modeId = entry.arguments?.getString("modeId").orEmpty()
-            SensorModeDetailScreen(modeId = modeId)
+            SensorModeDetailScreen(modeId = modeId, onBack = { navController.popBackStack() })
         }
     }
 }
@@ -137,8 +152,8 @@ private fun LightDeckBottomBar(navController: NavHostController) {
                         restoreState = true
                     }
                 },
-                icon = { Text(destination.icon) },
-                label = { Text(destination.label) },
+                icon = { Icon(destination.icon, contentDescription = destination.label) },
+                label = { androidx.compose.material3.Text(destination.label) },
             )
         }
     }

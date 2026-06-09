@@ -39,6 +39,20 @@ class LiveControlViewModel(
     fun updateDirection(direction: DirectionMode) {
         update { it.copy(direction = direction) }
     }
+
+    fun updateHsv(hue: Float = session.value.liveControl.hue, saturation: Float = session.value.liveControl.saturation, value: Float = session.value.liveControl.value) {
+        update {
+            val nextHue = hue.coerceIn(0f, 360f)
+            val nextSaturation = saturation.coerceIn(0f, 1f)
+            val nextValue = value.coerceIn(0f, 1f)
+            it.copy(
+                hue = nextHue,
+                saturation = nextSaturation,
+                value = nextValue,
+                color = hsvToRgb(nextHue, nextSaturation, nextValue),
+            )
+        }
+    }
 }
 
 @Composable
@@ -56,7 +70,7 @@ fun LiveControlScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 item {
-                    PageTitle("Live Control", "Tune color, brightness, speed and direction")
+                    PageTitle(title = "Live Control", subtitle = "Tune color, brightness, speed and direction")
                 }
                 item {
                     LedMatrixPreview(state.matrix, title = "Live preview")
@@ -69,14 +83,14 @@ fun LiveControlScreen(
                 }
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ExpressiveSlider("Hue", control.hue / 360f, { value -> viewModel.update { it.copy(hue = value * 360f, color = hueToRgb(value * 360f)) } })
-                        ExpressiveSlider("Saturation", control.saturation, { value -> viewModel.update { it.copy(saturation = value) } })
-                        ExpressiveSlider("Value", control.value, { value -> viewModel.update { it.copy(value = value) } })
-                        ExpressiveSlider("Red", control.color.red / 255f, { value -> viewModel.update { it.copy(color = it.color.copy(red = (value * 255).toInt())) } })
-                        ExpressiveSlider("Green", control.color.green / 255f, { value -> viewModel.update { it.copy(color = it.color.copy(green = (value * 255).toInt())) } })
-                        ExpressiveSlider("Blue", control.color.blue / 255f, { value -> viewModel.update { it.copy(color = it.color.copy(blue = (value * 255).toInt())) } })
-                        ExpressiveSlider("Brightness", control.brightness, { value -> viewModel.update { it.copy(brightness = value) } })
-                        ExpressiveSlider("Speed", control.speed, { value -> viewModel.update { it.copy(speed = value) } })
+                        ExpressiveSlider("Hue", control.hue / 360f, { value -> viewModel.updateHsv(hue = value * 360f) })
+                        ExpressiveSlider("Saturation", control.saturation, { value -> viewModel.updateHsv(saturation = value) })
+                        ExpressiveSlider("Value", control.value, { value -> viewModel.updateHsv(value = value) })
+                        ExpressiveSlider("Red", control.color.red / 255f, { value -> viewModel.update { it.copy(color = it.color.copy(red = (value * 255).toInt().coerceIn(0, 255))) } })
+                        ExpressiveSlider("Green", control.color.green / 255f, { value -> viewModel.update { it.copy(color = it.color.copy(green = (value * 255).toInt().coerceIn(0, 255))) } })
+                        ExpressiveSlider("Blue", control.color.blue / 255f, { value -> viewModel.update { it.copy(color = it.color.copy(blue = (value * 255).toInt().coerceIn(0, 255))) } })
+                        ExpressiveSlider("Brightness", control.brightness, { value -> viewModel.update { it.copy(brightness = value.coerceIn(0f, 1f)) } })
+                        ExpressiveSlider("Speed", control.speed, { value -> viewModel.update { it.copy(speed = value.coerceIn(0f, 1f)) } })
                         DirectionSegmentedControl(selected = control.direction, onSelect = viewModel::updateDirection)
                     }
                 }
@@ -85,15 +99,22 @@ fun LiveControlScreen(
     }
 }
 
-private fun hueToRgb(hue: Float): RgbColor {
+private fun hsvToRgb(hue: Float, saturation: Float, value: Float): RgbColor {
     val normalized = ((hue % 360f) + 360f) % 360f
-    val x = (1f - kotlin.math.abs((normalized / 60f) % 2f - 1f)) * 255
-    return when {
-        normalized < 60f -> RgbColor(255, x.toInt(), 0)
-        normalized < 120f -> RgbColor(x.toInt(), 255, 0)
-        normalized < 180f -> RgbColor(0, 255, x.toInt())
-        normalized < 240f -> RgbColor(0, x.toInt(), 255)
-        normalized < 300f -> RgbColor(x.toInt(), 0, 255)
-        else -> RgbColor(255, 0, x.toInt())
+    val c = value.coerceIn(0f, 1f) * saturation.coerceIn(0f, 1f)
+    val x = c * (1f - kotlin.math.abs((normalized / 60f) % 2f - 1f))
+    val m = value.coerceIn(0f, 1f) - c
+    val (r, g, b) = when {
+        normalized < 60f -> Triple(c, x, 0f)
+        normalized < 120f -> Triple(x, c, 0f)
+        normalized < 180f -> Triple(0f, c, x)
+        normalized < 240f -> Triple(0f, x, c)
+        normalized < 300f -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
     }
+    return RgbColor(
+        red = ((r + m) * 255).toInt().coerceIn(0, 255),
+        green = ((g + m) * 255).toInt().coerceIn(0, 255),
+        blue = ((b + m) * 255).toInt().coerceIn(0, 255),
+    )
 }

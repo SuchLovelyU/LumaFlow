@@ -23,7 +23,9 @@ data class BluetoothDeviceCandidate(
 
 sealed interface BluetoothConnectionEvent {
     data object Searching : BluetoothConnectionEvent
+    data object ScanComplete : BluetoothConnectionEvent
     data class Connected(val deviceAddress: String) : BluetoothConnectionEvent
     data object Disconnected : BluetoothConnectionEvent
+    data class Message(val message: String) : BluetoothConnectionEvent
     data class Error(val message: String) : BluetoothConnectionEvent
 }

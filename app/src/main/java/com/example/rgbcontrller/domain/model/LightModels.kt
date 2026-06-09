@@ -63,9 +63,9 @@ enum class EffectCategory(val label: String) {
 }
 
 enum class DirectionMode(val label: String) {
-    Horizontal("Horizontal"),
-    Vertical("Vertical"),
-    Circular("Circular"),
+    Horizontal("水平"),
+    Vertical("垂直"),
+    Circular("环形"),
 }
 
 data class LightEffect(
@@ -128,10 +128,19 @@ data class PlaybackState(
     val loop: Boolean = true,
 )
 
+data class AppSettings(
+    val darkMode: Boolean = false,
+    val dynamicTheme: Boolean = true,
+    val developerMode: Boolean = false,
+    val animationSpeed: Float = 0.72f,
+    val defaultBrightness: Float = 0.78f,
+)
+
 data class LightSessionState(
     val device: DeviceInfo,
     val matrix: LedMatrix,
     val activeEffect: LightEffect?,
     val liveControl: LiveControl,
     val playback: PlaybackState,
+    val keyframes: List<Keyframe>,
 )

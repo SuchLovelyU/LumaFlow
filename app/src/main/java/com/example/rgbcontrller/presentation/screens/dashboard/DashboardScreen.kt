@@ -63,7 +63,7 @@ fun DashboardScreen(
             ) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
                     Column {
-                        PageTitle("LightDeck", "RGB LED matrix control")
+                        PageTitle(title = "LightDeck", subtitle = "RGB LED matrix control")
                         Spacer(Modifier.height(16.dp))
                         DeviceStatusHeader(state.device, onClick = onOpenDevice)
                         Spacer(Modifier.height(16.dp))

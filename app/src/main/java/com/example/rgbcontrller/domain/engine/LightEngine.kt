@@ -2,6 +2,7 @@ package com.example.rgbcontrller.domain.engine
 
 import com.example.rgbcontrller.domain.model.LedMatrix
 import com.example.rgbcontrller.domain.model.LedPixel
+import com.example.rgbcontrller.domain.model.Keyframe
 import com.example.rgbcontrller.domain.model.LightEffect
 import com.example.rgbcontrller.domain.model.LiveControl
 import com.example.rgbcontrller.domain.model.RgbColor
@@ -29,6 +30,48 @@ class LightEngine {
                 brightness = brightness.coerceIn(0f, 1f),
                 glowIntensity = (brightness * 1.25f).coerceIn(0f, 1f),
                 animationPhase = phase,
+            )
+        }
+        return LedMatrix(rows, columns, pixels)
+    }
+
+    fun renderKeyframes(
+        rows: Int,
+        columns: Int,
+        positionMs: Long,
+        keyframes: List<Keyframe>,
+    ): LedMatrix {
+        val total = rows * columns
+        val safeKeyframes = keyframes.takeIf { it.isNotEmpty() } ?: listOf(
+            Keyframe("fallback", RgbColor.Cyan, 0.8f, 500),
+        )
+        val totalDuration = safeKeyframes.sumOf { it.durationMs.coerceAtLeast(1) }.coerceAtLeast(1)
+        val timelinePosition = (positionMs % totalDuration).toInt()
+
+        var elapsed = 0
+        val currentIndex = safeKeyframes.indexOfFirst { keyframe ->
+            val nextElapsed = elapsed + keyframe.durationMs.coerceAtLeast(1)
+            val contains = timelinePosition < nextElapsed
+            if (!contains) elapsed = nextElapsed
+            contains
+        }.takeIf { it >= 0 } ?: 0
+
+        val current = safeKeyframes[currentIndex]
+        val next = safeKeyframes[(currentIndex + 1).mod(safeKeyframes.size)]
+        val frameDuration = current.durationMs.coerceAtLeast(1)
+        val progress = ((timelinePosition - elapsed).coerceAtLeast(0) / frameDuration.toFloat()).coerceIn(0f, 1f)
+        val baseColor = mix(current.color, next.color, progress)
+        val baseBrightness = current.brightness + (next.brightness - current.brightness) * progress
+
+        val pixels = List(total) { index ->
+            val shimmer = (0.82f + abs(sin((positionMs / 28f + index * 24f).toRadians())).toFloat() * 0.18f)
+            val brightness = (baseBrightness * shimmer).coerceIn(0f, 1f)
+            LedPixel(
+                id = index,
+                color = baseColor,
+                brightness = brightness,
+                glowIntensity = (brightness * 1.2f).coerceIn(0f, 1f),
+                animationPhase = progress * 360f,
             )
         }
         return LedMatrix(rows, columns, pixels)

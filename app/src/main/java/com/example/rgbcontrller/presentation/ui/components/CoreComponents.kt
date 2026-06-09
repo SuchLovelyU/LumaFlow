@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -108,7 +110,7 @@ fun DeviceStatusHeader(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
         ),
@@ -176,7 +178,7 @@ fun LedMatrixPreview(
 ) {
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(32.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
         ),
@@ -190,7 +192,7 @@ fun LedMatrixPreview(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1.72f)
-                    .clip(RoundedCornerShape(28.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(
                         Brush.radialGradient(
                             listOf(
@@ -230,7 +232,7 @@ fun SceneShortcutCard(effect: LightEffect, onClick: () -> Unit, modifier: Modifi
         modifier = modifier
             .height(142.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.SpaceBetween) {
@@ -249,11 +251,11 @@ fun EffectMarketCard(effect: LightEffect, onClick: () -> Unit, modifier: Modifie
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)),
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            MiniEffectPreview(effect.palette, modifier = Modifier.size(96.dp).clip(RoundedCornerShape(24.dp)))
+            MiniEffectPreview(effect.palette, modifier = Modifier.size(96.dp).clip(RoundedCornerShape(8.dp)))
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(effect.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -278,7 +280,7 @@ fun MiniEffectPreview(palette: List<RgbColor>, modifier: Modifier = Modifier) {
         val colors = palette.ifEmpty { listOf(RgbColor.Cyan) }.map { it.toComposeColor() }
         drawRoundRect(
             brush = Brush.linearGradient(colors, start = Offset(size.width * phase, 0f), end = Offset(0f, size.height)),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx()),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()),
         )
         repeat(8) { index ->
             val x = size.width * ((index / 7f + phase) % 1f)
@@ -300,7 +302,7 @@ fun ExpressiveSlider(
             Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text("${(value * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
-        Slider(value = value, onValueChange = onValueChange)
+        Slider(value = value.coerceIn(0f, 1f), onValueChange = { onValueChange(it.coerceIn(0f, 1f)) })
     }
 }
 
@@ -354,11 +356,11 @@ fun SensorModeCard(
 ) {
     ElevatedCard(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            SensorPreview(mode.id, snapshot, Modifier.size(82.dp).clip(RoundedCornerShape(24.dp)))
+            SensorPreview(mode.id, snapshot, Modifier.size(82.dp).clip(RoundedCornerShape(8.dp)))
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(mode.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -411,15 +413,27 @@ fun TimelineEditor(
             Text("${keyframes.size} frames", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            keyframes.forEach { keyframe ->
+        if (keyframes.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().height(96.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+                tonalElevation = 1.dp,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("No keyframes yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else {
+            LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(keyframes, key = { it.id }) { keyframe ->
                 val isSelected = selectedId == keyframe.id
                 Surface(
                     modifier = Modifier
-                        .weight(1f)
+                        .width(112.dp)
                         .height(96.dp)
                         .clickable { onSelect(keyframe.id) },
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(8.dp),
                     color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                     tonalElevation = if (isSelected) 4.dp else 1.dp,
                 ) {
@@ -428,7 +442,7 @@ fun TimelineEditor(
                             Modifier
                                 .fillMaxWidth()
                                 .height(26.dp)
-                                .clip(RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(keyframe.color.toComposeColor()),
                         )
                         Text("${keyframe.durationMs} ms", style = MaterialTheme.typography.labelLarge)
@@ -436,10 +450,11 @@ fun TimelineEditor(
                     }
                 }
             }
+            }
         }
         AnimatedVisibility(visible = selectedId != null, enter = fadeIn(), exit = fadeOut()) {
             Text(
-                "Selected frame can later edit RGB, brightness, duration and easing.",
+                selectedId?.let { "Frame $it selected" }.orEmpty(),
                 modifier = Modifier.padding(top = 12.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -449,7 +464,7 @@ fun TimelineEditor(
 }
 
 @Composable
-fun PageTitle(title: String, subtitle: String? = null, modifier: Modifier = Modifier) {
+fun PageTitle(title: String, modifier: Modifier = Modifier, subtitle: String? = null) {
     Column(modifier.fillMaxWidth()) {
         AnimatedContent(
             targetState = title,

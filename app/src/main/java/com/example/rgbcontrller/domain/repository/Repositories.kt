@@ -1,6 +1,7 @@
 package com.example.rgbcontrller.domain.repository
 
 import com.example.rgbcontrller.domain.model.DeviceInfo
+import com.example.rgbcontrller.domain.model.AppSettings
 import com.example.rgbcontrller.domain.model.Keyframe
 import com.example.rgbcontrller.domain.model.LightEffect
 import com.example.rgbcontrller.domain.model.LightSessionState
@@ -36,4 +37,13 @@ interface EffectRepository {
 interface SensorRepository {
     val modes: List<SensorMode>
     val snapshot: StateFlow<SensorSnapshot>
+}
+
+interface SettingsRepository {
+    val settings: StateFlow<AppSettings>
+    fun updateDarkMode(value: Boolean)
+    fun updateDynamicTheme(value: Boolean)
+    fun updateDeveloperMode(value: Boolean)
+    fun updateAnimationSpeed(value: Float)
+    fun updateDefaultBrightness(value: Float)
 }

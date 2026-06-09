@@ -15,6 +15,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import com.example.rgbcontrller.domain.model.LedMatrix
 import com.example.rgbcontrller.domain.model.RgbColor
 import java.util.UUID
@@ -47,6 +48,7 @@ class AndroidBluetoothService(
     private var writeCharacteristic: BluetoothGattCharacteristic? = null
     private var negotiatedPayloadSize = DefaultPayloadSize
     private var scanning = false
+    private var scanSessionId = 0L
 
     private val _connectionEvents = MutableSharedFlow<BluetoothConnectionEvent>(extraBufferCapacity = 16)
     override val connectionEvents: SharedFlow<BluetoothConnectionEvent> = _connectionEvents.asSharedFlow()
@@ -73,6 +75,8 @@ class AndroidBluetoothService(
 
         override fun onScanFailed(errorCode: Int) {
             scope.launch {
+                scanning = false
+                scanSessionId += 1
                 _connectionEvents.emit(BluetoothConnectionEvent.Error("BLE scan failed: $errorCode."))
             }
         }
@@ -143,8 +147,8 @@ class AndroidBluetoothService(
             _connectionEvents.emit(BluetoothConnectionEvent.Error("This device does not support BLE."))
             return
         }
-        if (!hasBluetoothPermission()) {
-            _connectionEvents.emit(BluetoothConnectionEvent.Error("Bluetooth permission is required."))
+        if (!hasScanPermission()) {
+            _connectionEvents.emit(BluetoothConnectionEvent.Error("Bluetooth scan permission is required."))
             return
         }
         if (!bluetoothAdapter.isEnabled) {
@@ -160,6 +164,7 @@ class AndroidBluetoothService(
         if (scanning) {
             bluetoothScanner.stopScan(scanCallback)
         }
+        val sessionId = ++scanSessionId
         scanning = true
         bluetoothScanner.startScan(
             null,
@@ -168,6 +173,14 @@ class AndroidBluetoothService(
                 .build(),
             scanCallback,
         )
+        scope.launch {
+            delay(ScanWindowMs)
+            if (scanning && scanSessionId == sessionId) {
+                bluetoothScanner.stopScan(scanCallback)
+                scanning = false
+                _connectionEvents.emit(BluetoothConnectionEvent.ScanComplete)
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -178,8 +191,8 @@ class AndroidBluetoothService(
             _connectionEvents.emit(BluetoothConnectionEvent.Error("This device does not support BLE."))
             return
         }
-        if (!hasBluetoothPermission()) {
-            _connectionEvents.emit(BluetoothConnectionEvent.Error("Bluetooth permission is required."))
+        if (!hasConnectPermission()) {
+            _connectionEvents.emit(BluetoothConnectionEvent.Error("Bluetooth connect permission is required."))
             return
         }
 
@@ -187,11 +200,15 @@ class AndroidBluetoothService(
             if (scanning) {
                 bluetoothScanner?.stopScan(scanCallback)
                 scanning = false
+                scanSessionId += 1
             }
             closeGatt()
             _connectionEvents.emit(BluetoothConnectionEvent.Searching)
             negotiatedPayloadSize = DefaultPayloadSize
-            val device = bluetoothAdapter.getRemoteDevice(deviceAddress)
+            val device = runCatching { bluetoothAdapter.getRemoteDevice(deviceAddress) }.getOrElse {
+                _connectionEvents.emit(BluetoothConnectionEvent.Error("Invalid Bluetooth address."))
+                return@withContext
+            }
             gatt = device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         }
     }
@@ -211,6 +228,7 @@ class AndroidBluetoothService(
         writeBytes(Ws2812Protocol.setAllLed(color, brightness), reportIfDisconnected = true)
     }
 
+    @SuppressLint("MissingPermission")
     private suspend fun writeBytes(bytes: ByteArray, reportIfDisconnected: Boolean) {
         withContext(Dispatchers.IO) {
             writeMutex.withLock {
@@ -222,22 +240,49 @@ class AndroidBluetoothService(
                     }
                     return@withLock
                 }
+                if (!hasConnectPermission()) {
+                    if (reportIfDisconnected) {
+                        _connectionEvents.emit(BluetoothConnectionEvent.Error("Bluetooth connect permission is required."))
+                    }
+                    return@withLock
+                }
 
                 val chunkSize = negotiatedPayloadSize.coerceAtLeast(DefaultPayloadSize)
                 bytes.asIterable().chunked(chunkSize).forEach { chunk ->
                     val payload = chunk.toByteArray()
-                    val result = activeGatt.writeCharacteristic(
-                        characteristic,
-                        payload,
-                        characteristic.writeType,
-                    )
-                    if (result != BluetoothStatusCodes.SUCCESS) {
-                        _connectionEvents.emit(BluetoothConnectionEvent.Error("BLE write failed: $result."))
+                    val result = writeCharacteristic(activeGatt, characteristic, payload)
+                    if (!result.success) {
+                        _connectionEvents.emit(BluetoothConnectionEvent.Error("BLE write failed: ${result.message}."))
                         return@withLock
                     }
                     delay(WriteGapMs)
                 }
             }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun writeCharacteristic(
+        activeGatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        payload: ByteArray,
+    ): WriteResult {
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val status = activeGatt.writeCharacteristic(
+                    characteristic,
+                    payload,
+                    characteristic.writeType,
+                )
+                WriteResult(status == BluetoothStatusCodes.SUCCESS, status.toString())
+            } else {
+                @Suppress("DEPRECATION")
+                characteristic.value = payload
+                @Suppress("DEPRECATION")
+                WriteResult(activeGatt.writeCharacteristic(characteristic), "legacy API returned false")
+            }
+        }.getOrElse { error ->
+            WriteResult(false, error.message ?: error::class.java.simpleName)
         }
     }
 
@@ -257,9 +302,21 @@ class AndroidBluetoothService(
             .sortedWith(deviceComparator)
     }
 
-    private fun hasBluetoothPermission(): Boolean {
-        return appContext.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+    private fun hasScanPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            appContext.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+                appContext.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            appContext.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun hasConnectPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             appContext.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -290,6 +347,7 @@ class AndroidBluetoothService(
         const val GattHeaderSize = 3
         const val DefaultPayloadSize = 20
         const val WriteGapMs = 8L
+        const val ScanWindowMs = 12_000L
 
         val PreferredWriteCharacteristicUuids = listOf(
             UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb"), // HM-10 / JDY style UART
@@ -304,3 +362,8 @@ class AndroidBluetoothService(
             .thenBy { it.address }
     }
 }
+
+private data class WriteResult(
+    val success: Boolean,
+    val message: String,
+)
