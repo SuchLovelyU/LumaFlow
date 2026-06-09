@@ -33,9 +33,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -44,7 +42,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -77,23 +74,27 @@ fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable () -> U
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f),
+                        MaterialTheme.colorScheme.background,
+                    ),
+                ),
+            ),
     ) {
-        Canvas(Modifier.fillMaxSize().blur(28.dp)) {
-            drawCircle(
-                color = Color(0xFF00D5FF).copy(alpha = 0.18f),
-                radius = size.minDimension * 0.55f,
-                center = Offset(size.width * (0.18f + drift * 0.14f), size.height * 0.12f),
-            )
-            drawCircle(
-                color = Color(0xFFFF4FD8).copy(alpha = 0.12f),
-                radius = size.minDimension * 0.5f,
-                center = Offset(size.width * (0.85f - drift * 0.18f), size.height * 0.38f),
-            )
-            drawCircle(
-                color = Color(0xFF4DFFB5).copy(alpha = 0.10f),
-                radius = size.minDimension * 0.42f,
-                center = Offset(size.width * 0.35f, size.height * (0.86f - drift * 0.08f)),
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFF00D5FF).copy(alpha = 0.05f + drift * 0.02f),
+                        Color(0xFFFFB74D).copy(alpha = 0.04f),
+                        Color(0xFFFF4FD8).copy(alpha = 0.04f + (1f - drift) * 0.02f),
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height),
+                ),
             )
         }
         content()
@@ -106,13 +107,13 @@ fun DeviceStatusHeader(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ElevatedCard(
+    Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
         ),
     ) {
         Row(
@@ -135,21 +136,6 @@ fun DeviceStatusHeader(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text("${device.batteryPercent}%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    if (device.isCharging) "Charging" else "Battery",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { device.batteryPercent / 100f },
-                    modifier = Modifier.width(76.dp).height(6.dp).clip(CircleShape),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
             }
         }
     }
@@ -176,11 +162,11 @@ fun LedMatrixPreview(
     modifier: Modifier = Modifier,
     title: String? = null,
 ) {
-    ElevatedCard(
+    Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
         ),
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -192,12 +178,12 @@ fun LedMatrixPreview(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1.72f)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(20.dp))
                     .background(
                         Brush.radialGradient(
                             listOf(
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.82f),
                             ),
                         ),
                     ),
@@ -219,21 +205,28 @@ private fun DrawScope.drawMatrix(matrix: LedMatrix) {
         val column = pixel.id % columns
         val center = Offset(column * cellW + cellW / 2f, row * cellH + cellH / 2f)
         val color = pixel.color.toComposeColor()
+        drawCircle(Color.Black.copy(alpha = 0.22f), ledRadius * 1.18f, center)
         drawCircle(color.copy(alpha = 0.22f * pixel.glowIntensity), ledRadius * 2.8f, center)
         drawCircle(color.copy(alpha = 0.34f * pixel.glowIntensity), ledRadius * 1.75f, center)
-        drawCircle(color.copy(alpha = 0.95f), ledRadius * (0.82f + pixel.brightness * 0.28f), center)
-        drawCircle(Color.White.copy(alpha = 0.45f), ledRadius * 0.25f, center + Offset(-ledRadius * 0.25f, -ledRadius * 0.25f))
+        drawCircle(color.copy(alpha = 0.95f * pixel.brightness), ledRadius * (0.72f + pixel.brightness * 0.38f), center)
+        drawCircle(Color.White.copy(alpha = 0.45f * pixel.brightness), ledRadius * 0.25f, center + Offset(-ledRadius * 0.25f, -ledRadius * 0.25f))
     }
 }
 
 @Composable
-fun SceneShortcutCard(effect: LightEffect, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SceneShortcutCard(effect: LightEffect, onClick: () -> Unit, modifier: Modifier = Modifier, isActive: Boolean = false) {
     Card(
         modifier = modifier
             .height(142.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isActive) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f)
+            },
+        ),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.SpaceBetween) {
             MiniEffectPreview(effect.palette, modifier = Modifier.fillMaxWidth().height(58.dp))
@@ -247,15 +240,15 @@ fun SceneShortcutCard(effect: LightEffect, onClick: () -> Unit, modifier: Modifi
 
 @Composable
 fun EffectMarketCard(effect: LightEffect, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    ElevatedCard(
+    Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)),
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            MiniEffectPreview(effect.palette, modifier = Modifier.size(96.dp).clip(RoundedCornerShape(8.dp)))
+            MiniEffectPreview(effect.palette, modifier = Modifier.size(96.dp).clip(RoundedCornerShape(18.dp)))
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(effect.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -280,7 +273,7 @@ fun MiniEffectPreview(palette: List<RgbColor>, modifier: Modifier = Modifier) {
         val colors = palette.ifEmpty { listOf(RgbColor.Cyan) }.map { it.toComposeColor() }
         drawRoundRect(
             brush = Brush.linearGradient(colors, start = Offset(size.width * phase, 0f), end = Offset(0f, size.height)),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(18.dp.toPx()),
         )
         repeat(8) { index ->
             val x = size.width * ((index / 7f + phase) % 1f)
@@ -353,14 +346,21 @@ fun SensorModeCard(
     snapshot: SensorSnapshot,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isActive: Boolean = false,
 ) {
-    ElevatedCard(
+    Card(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isActive) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+            },
+        ),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            SensorPreview(mode.id, snapshot, Modifier.size(82.dp).clip(RoundedCornerShape(8.dp)))
+            SensorPreview(mode.id, snapshot, Modifier.size(82.dp).clip(RoundedCornerShape(18.dp)))
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(mode.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -416,8 +416,8 @@ fun TimelineEditor(
         if (keyframes.isEmpty()) {
             Surface(
                 modifier = Modifier.fillMaxWidth().height(96.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
                 tonalElevation = 1.dp,
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -434,7 +434,7 @@ fun TimelineEditor(
                         .height(96.dp)
                         .clickable { onSelect(keyframe.id) },
                     shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = if (isSelected) 4.dp else 1.dp,
                 ) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
@@ -442,7 +442,7 @@ fun TimelineEditor(
                             Modifier
                                 .fillMaxWidth()
                                 .height(26.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(keyframe.color.toComposeColor()),
                         )
                         Text("${keyframe.durationMs} ms", style = MaterialTheme.typography.labelLarge)

@@ -6,8 +6,12 @@ import com.example.rgbcontrller.domain.model.Keyframe
 import com.example.rgbcontrller.domain.model.LightEffect
 import com.example.rgbcontrller.domain.model.LiveControl
 import com.example.rgbcontrller.domain.model.RgbColor
+import com.example.rgbcontrller.domain.model.SensorSnapshot
+import com.example.rgbcontrller.domain.model.Vector3
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.sqrt
 import kotlin.math.sin
 
 class LightEngine {
@@ -17,8 +21,20 @@ class LightEngine {
         tick: Long,
         effect: LightEffect?,
         liveControl: LiveControl,
+        sensorSnapshot: SensorSnapshot = SensorSnapshot(
+            microphoneLevel = 0f,
+            gravity = Vector3(0f, 1f, 0f),
+            gyroscope = Vector3(0f, 0f, 0f),
+            shakeIntensity = 0f,
+        ),
     ): LedMatrix {
         val total = rows * columns
+        if (effect?.id == "gravity") {
+            return renderGravityFluid(rows, columns, liveControl, sensorSnapshot)
+        }
+        if (effect?.id == "music") {
+            return renderMusicPulse(rows, columns, tick, effect, liveControl, sensorSnapshot)
+        }
         val pixels = List(total) { index ->
             val phase = ((tick / 34f) + index * 0.55f) % 360f
             val base = effect?.palette?.takeIf { it.isNotEmpty() } ?: listOf(liveControl.color)
@@ -29,6 +45,81 @@ class LightEngine {
                 color = color,
                 brightness = brightness.coerceIn(0f, 1f),
                 glowIntensity = (brightness * 1.25f).coerceIn(0f, 1f),
+                animationPhase = phase,
+            )
+        }
+        return LedMatrix(rows, columns, pixels)
+    }
+
+    private fun renderGravityFluid(
+        rows: Int,
+        columns: Int,
+        liveControl: LiveControl,
+        sensorSnapshot: SensorSnapshot,
+    ): LedMatrix {
+        val gravity = sensorSnapshot.gravity
+        val magnitude = sqrt(gravity.x * gravity.x + gravity.y * gravity.y).coerceAtLeast(0.001f)
+        val downX = gravity.x / magnitude
+        val downY = gravity.y / magnitude
+        val fill = liveControl.fluidLevel.coerceIn(0.05f, 0.95f)
+        val density = liveControl.fluidDensity.coerceIn(0f, 1f)
+        val surface = 1f - fill * 2f
+        val softness = 0.55f - density * 0.25f
+        val total = rows * columns
+
+        val pixels = List(total) { index ->
+            val row = index / columns
+            val column = index % columns
+            val x = if (columns == 1) 0f else column / (columns - 1f) * 2f - 1f
+            val y = if (rows == 1) 0f else row / (rows - 1f) * 2f - 1f
+            val lowSideProjection = (x * downX + y * downY).coerceIn(-1.2f, 1.2f)
+            val fluid = smoothStep(surface - softness, surface + softness, lowSideProjection)
+            val brightness = (fluid * liveControl.brightness * (0.45f + density * 0.55f)).coerceIn(0f, 1f)
+            val color = mix(
+                mix(RgbColor.Cyan, RgbColor.Green, density),
+                RgbColor.Amber,
+                (fluid * density * 0.55f).coerceIn(0f, 1f),
+            )
+            LedPixel(
+                id = index,
+                color = color,
+                brightness = brightness,
+                glowIntensity = (brightness * (1.1f + density * 0.3f)).coerceIn(0f, 1f),
+                animationPhase = fluid * 360f,
+            )
+        }
+
+        return LedMatrix(rows, columns, pixels)
+    }
+
+    private fun renderMusicPulse(
+        rows: Int,
+        columns: Int,
+        tick: Long,
+        effect: LightEffect,
+        liveControl: LiveControl,
+        sensorSnapshot: SensorSnapshot,
+    ): LedMatrix {
+        val total = rows * columns
+        val threshold = liveControl.musicThreshold.coerceIn(0f, 0.95f)
+        val level = sensorSnapshot.microphoneLevel.coerceIn(0f, 1f)
+        val energy = if (level <= threshold) {
+            0f
+        } else {
+            ((level - threshold) / max(0.001f, 1f - threshold)).coerceIn(0f, 1f)
+        }
+        val palette = effect.palette.ifEmpty { listOf(liveControl.color) }
+        val pixels = List(total) { index ->
+            val phase = ((tick / 18f) + index * 31f).mod(360f)
+            val beatShape = abs(sin(phase.toRadians())).toFloat()
+            val localEnergy = (energy * (0.58f + beatShape * 0.42f)).coerceIn(0f, 1f)
+            val color = colorFor(effect.id, palette, index, total, phase + level * 180f)
+            val brightness = (localEnergy * liveControl.brightness).coerceIn(0f, 1f)
+            LedPixel(
+                id = index,
+                color = color,
+                brightness = brightness,
+                glowIntensity = (brightness * 1.35f).coerceIn(0f, 1f),
                 animationPhase = phase,
             )
         }
@@ -127,6 +218,11 @@ class LightEngine {
             green = (start.green + (end.green - start.green) * t).toInt(),
             blue = (start.blue + (end.blue - start.blue) * t).toInt(),
         )
+    }
+
+    private fun smoothStep(edge0: Float, edge1: Float, value: Float): Float {
+        val t = ((value - edge0) / (edge1 - edge0).coerceAtLeast(0.001f)).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
     }
 
     private fun Float.toRadians(): Double = this / 180.0 * PI

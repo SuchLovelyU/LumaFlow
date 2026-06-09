@@ -16,6 +16,7 @@ interface LightRepository {
     val session: StateFlow<LightSessionState>
     fun applyEffect(effect: LightEffect)
     fun updateLiveControl(control: LiveControl)
+    fun updateEffectControl(control: LiveControl)
     fun updateKeyframes(keyframes: List<Keyframe>)
     fun togglePlayback()
 }

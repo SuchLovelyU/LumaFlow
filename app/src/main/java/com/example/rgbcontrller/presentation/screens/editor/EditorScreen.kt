@@ -23,6 +23,7 @@ import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -103,6 +104,10 @@ class EditorViewModel(
         lightRepository.togglePlayback()
     }
 
+    fun activateEditorDefault() {
+        lightRepository.updateKeyframes(keyframes)
+    }
+
     fun updateSelectedBrightness(value: Float) {
         updateSelected { it.copy(brightness = value.coerceIn(0f, 1f)) }
     }
@@ -168,6 +173,9 @@ fun EditorScreen(
     viewModel: EditorViewModel = viewModel(),
 ) {
     val state by viewModel.session.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.activateEditorDefault()
+    }
     AuroraBackground(modifier.fillMaxSize()) {
         Scaffold(containerColor = androidx.compose.ui.graphics.Color.Transparent) { padding ->
             LazyColumn(

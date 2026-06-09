@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -34,6 +35,10 @@ class LiveControlViewModel(
 
     fun update(transform: (LiveControl) -> LiveControl) {
         lightRepository.updateLiveControl(transform(session.value.liveControl))
+    }
+
+    fun activateLiveDefault() {
+        lightRepository.updateLiveControl(session.value.liveControl)
     }
 
     fun updateDirection(direction: DirectionMode) {
@@ -62,6 +67,9 @@ fun LiveControlScreen(
 ) {
     val state by viewModel.session.collectAsState()
     val control = state.liveControl
+    LaunchedEffect(Unit) {
+        viewModel.activateLiveDefault()
+    }
     AuroraBackground(modifier.fillMaxSize()) {
         Scaffold(containerColor = androidx.compose.ui.graphics.Color.Transparent) { padding ->
             LazyColumn(

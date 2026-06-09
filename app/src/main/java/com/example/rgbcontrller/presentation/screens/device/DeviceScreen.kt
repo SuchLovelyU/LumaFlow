@@ -111,7 +111,6 @@ fun DeviceScreen(
                             InfoRow("Device name", device.name)
                             InfoRow("Firmware", device.firmwareVersion)
                             InfoRow("LED count", "${device.ledCount}")
-                            InfoRow("Battery", "${device.batteryPercent}%")
                             InfoRow("Bluetooth", device.connectionStatus.name)
                             statusMessage?.let {
                                 Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)

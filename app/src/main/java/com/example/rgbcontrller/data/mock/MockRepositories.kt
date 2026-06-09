@@ -40,6 +40,14 @@ class MockLightRepository(
     private val bluetoothService: BluetoothService,
     private val deviceState: StateFlow<DeviceInfo> = MutableStateFlow(MockCatalog.device),
     private val settingsState: StateFlow<AppSettings> = MutableStateFlow(AppSettings()),
+    private val sensorSnapshot: StateFlow<SensorSnapshot> = MutableStateFlow(
+        SensorSnapshot(
+            microphoneLevel = 0f,
+            gravity = Vector3(0f, 1f, 0f),
+            gyroscope = Vector3(0f, 0f, 0f),
+            shakeIntensity = 0f,
+        ),
+    ),
     private val keyframeStore: KeyframeStore = InMemoryKeyframeStore(),
     private val engine: LightEngine = LightEngine(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
@@ -96,6 +104,14 @@ class MockLightRepository(
         renderMode = RenderMode.Live
     }
 
+    override fun updateEffectControl(control: LiveControl) {
+        liveControl = control
+        if (activeEffect == null) {
+            activeEffect = MockCatalog.effects.first { it.id == "aurora" }
+        }
+        renderMode = RenderMode.Effect
+    }
+
     override fun updateKeyframes(keyframes: List<Keyframe>) {
         this.keyframes = keyframes
         keyframeStore.save(keyframes)
@@ -114,8 +130,9 @@ class MockLightRepository(
             tick = tick,
             effect = activeEffect,
             liveControl = liveControl.copy(brightness = settingsState.value.defaultBrightness),
+            sensorSnapshot = sensorSnapshot.value,
         )
-        RenderMode.Live -> engine.render(2, 4, tick, null, liveControl)
+        RenderMode.Live -> engine.render(2, 4, tick, null, liveControl, sensorSnapshot.value)
         RenderMode.Editor -> engine.renderKeyframes(2, 4, playback.positionMs, keyframes)
     }
 
@@ -415,6 +432,7 @@ object AppContainer {
             bluetoothService = bluetoothService,
             deviceState = sharedDeviceState,
             settingsState = settingsRepository.settings,
+            sensorSnapshot = sensorRepository.snapshot,
             keyframeStore = SharedPreferencesKeyframeStore(context),
         )
         deviceRepository = MockDeviceRepository(bluetoothService, sharedDeviceState)

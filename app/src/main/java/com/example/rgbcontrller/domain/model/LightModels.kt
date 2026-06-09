@@ -57,15 +57,15 @@ data class DeviceInfo(
 )
 
 enum class EffectCategory(val label: String) {
-    Basic("基础效果"),
-    Dynamic("动态效果"),
-    Advanced("高级效果"),
+    Basic("Basic"),
+    Dynamic("Dynamic"),
+    Advanced("Sensor"),
 }
 
 enum class DirectionMode(val label: String) {
-    Horizontal("水平"),
-    Vertical("垂直"),
-    Circular("环形"),
+    Horizontal("Horizontal"),
+    Vertical("Vertical"),
+    Circular("Circular"),
 }
 
 data class LightEffect(
@@ -83,15 +83,18 @@ data class LiveControl(
     val value: Float = 1f,
     val brightness: Float = 0.78f,
     val speed: Float = 0.55f,
+    val musicThreshold: Float = 0.55f,
+    val fluidLevel: Float = 0.62f,
+    val fluidDensity: Float = 0.72f,
     val direction: DirectionMode = DirectionMode.Horizontal,
     val selectedLedId: Int? = null,
 )
 
 enum class SensorModeType(val label: String) {
-    Music("音乐律动"),
-    Gravity("重力模式"),
-    Gyroscope("陀螺仪"),
-    Shake("摇晃模式"),
+    Music("Music"),
+    Gravity("Gravity"),
+    Gyroscope("Gyroscope"),
+    Shake("Shake"),
 }
 
 data class SensorMode(

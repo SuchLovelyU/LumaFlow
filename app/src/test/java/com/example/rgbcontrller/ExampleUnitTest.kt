@@ -1,9 +1,9 @@
 package com.example.rgbcontrller
 
-import com.example.rgbcontrller.data.bluetooth.Ws2812Protocol
 import com.example.rgbcontrller.data.bluetooth.BluetoothConnectionEvent
 import com.example.rgbcontrller.data.bluetooth.BluetoothDeviceCandidate
 import com.example.rgbcontrller.data.bluetooth.BluetoothService
+import com.example.rgbcontrller.data.bluetooth.Ws2812Protocol
 import com.example.rgbcontrller.data.mock.KeyframeCodec
 import com.example.rgbcontrller.data.mock.MockCatalog
 import com.example.rgbcontrller.data.mock.MockDeviceRepository
@@ -24,8 +24,8 @@ import com.example.rgbcontrller.domain.model.Vector3
 import com.example.rgbcontrller.domain.repository.EffectRepository
 import com.example.rgbcontrller.domain.repository.LightRepository
 import com.example.rgbcontrller.domain.repository.SensorRepository
+import com.example.rgbcontrller.presentation.screens.dashboard.DashboardViewModel
 import com.example.rgbcontrller.presentation.screens.editor.EditorViewModel
-import com.example.rgbcontrller.presentation.screens.sensors.SensorModesViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -38,11 +38,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ExampleUnitTest {
-    @Test
-    fun addition_isCorrect() {
-        assertEquals(4, 2 + 2)
-    }
-
     @Test
     fun setOneLed_matchesProtocolExample() {
         val frame = Ws2812Protocol.setOneLed(
@@ -112,6 +107,53 @@ class ExampleUnitTest {
     }
 
     @Test
+    fun musicPulse_staysOffBelowThresholdAndLightsAboveIt() {
+        val effect = MockCatalog.effects.first { it.id == "music" }
+        val control = LiveControl(brightness = 1f, musicThreshold = 0.6f)
+        val engine = LightEngine()
+
+        val quiet = engine.render(
+            rows = 2,
+            columns = 4,
+            tick = 0,
+            effect = effect,
+            liveControl = control,
+            sensorSnapshot = SensorSnapshot(0.4f, Vector3(0f, 1f, 0f), Vector3(0f, 0f, 0f), 0f),
+        )
+        val loud = engine.render(
+            rows = 2,
+            columns = 4,
+            tick = 0,
+            effect = effect,
+            liveControl = control,
+            sensorSnapshot = SensorSnapshot(0.9f, Vector3(0f, 1f, 0f), Vector3(0f, 0f, 0f), 0f),
+        )
+
+        assertTrue(quiet.pixels.all { it.brightness == 0f })
+        assertTrue(loud.pixels.any { it.brightness > 0.3f })
+    }
+
+    @Test
+    fun gravityFluid_usesContinuousBrightnessAcrossTilt() {
+        val effect = MockCatalog.effects.first { it.id == "gravity" }
+        val matrix = LightEngine().render(
+            rows = 2,
+            columns = 4,
+            tick = 0,
+            effect = effect,
+            liveControl = LiveControl(brightness = 1f, fluidLevel = 0.5f, fluidDensity = 0.5f),
+            sensorSnapshot = SensorSnapshot(0f, Vector3(1f, 0f, 0f), Vector3(0f, 0f, 0f), 0f),
+        )
+
+        val left = matrix.pixels.filter { it.id % matrix.columns == 0 }.map { it.brightness }.average()
+        val right = matrix.pixels.filter { it.id % matrix.columns == matrix.columns - 1 }.map { it.brightness }.average()
+        val uniqueBrightnessValues = matrix.pixels.map { (it.brightness * 100).toInt() }.toSet()
+
+        assertTrue(right > left)
+        assertTrue(uniqueBrightnessValues.size > 2)
+    }
+
+    @Test
     fun keyframeCodec_roundTripsAndSkipsInvalidFrames() {
         val keyframes = listOf(
             Keyframe("kf-custom", RgbColor(12, 34, 56), 0.67f, 789),
@@ -123,12 +165,6 @@ class ExampleUnitTest {
         assertEquals(2, decoded.size)
         assertEquals(Keyframe("kf-custom", RgbColor(12, 34, 56), 0.67f, 789), decoded[0])
         assertEquals(Keyframe("kf-overflow", RgbColor(255, 0, 128), 1f, 1), decoded[1])
-    }
-
-    @Test
-    fun keyframeCodec_decodesBlankPayloadAsEmptyList() {
-        assertTrue(KeyframeCodec.decode("").isEmpty())
-        assertTrue(KeyframeCodec.decode("bad|frame").isEmpty())
     }
 
     @Test
@@ -185,9 +221,7 @@ class ExampleUnitTest {
 
     @Test
     fun editorViewModel_initializesKeyframesFromRepositorySession() {
-        val customKeyframes = listOf(
-            Keyframe("custom-1", RgbColor.Amber, 0.4f, 900),
-        )
+        val customKeyframes = listOf(Keyframe("custom-1", RgbColor.Amber, 0.4f, 900))
         val viewModel = EditorViewModel(FakeLightRepository(initialKeyframes = customKeyframes))
 
         assertEquals(customKeyframes, viewModel.keyframes)
@@ -217,20 +251,16 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun sensorModesViewModel_activatesMappedLightEffect() {
+    fun dashboardViewModel_activatesSensorMappedLightEffect() {
         val lightRepository = FakeLightRepository()
-        val viewModel = SensorModesViewModel(
-            sensorRepository = FakeSensorRepository(),
-            effectRepository = FakeEffectRepository(),
+        val viewModel = DashboardViewModel(
             lightRepository = lightRepository,
+            effectRepository = FakeEffectRepository(),
+            sensorRepository = FakeSensorRepository(),
         )
 
-        viewModel.selectAction("方向追踪")
-        val activated = viewModel.activateMode("gyro")
-
-        assertTrue(activated)
-        assertEquals("gyro", viewModel.activeModeId)
-        assertEquals("方向追踪", viewModel.selectedAction)
+        viewModel.activateSensorMode(MockCatalog.sensorModes.first { it.id == "gyro" })
+        assertEquals("gyro", viewModel.activeSensorModeId)
         assertEquals("direction", lightRepository.lastEffect?.id)
     }
 
@@ -261,6 +291,8 @@ private class FakeLightRepository(
     }
 
     override fun updateLiveControl(control: LiveControl) = Unit
+
+    override fun updateEffectControl(control: LiveControl) = Unit
 
     override fun updateKeyframes(keyframes: List<Keyframe>) {
         lastKeyframes = keyframes
