@@ -59,7 +59,7 @@ class LightEngine {
     ): LedMatrix {
         val gravity = sensorSnapshot.gravity
         val magnitude = sqrt(gravity.x * gravity.x + gravity.y * gravity.y).coerceAtLeast(0.001f)
-        val downX = gravity.x / magnitude
+        val downX = -gravity.x / magnitude
         val downY = gravity.y / magnitude
         val fill = liveControl.fluidLevel.coerceIn(0.05f, 0.95f)
         val density = liveControl.fluidDensity.coerceIn(0f, 1f)

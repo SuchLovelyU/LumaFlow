@@ -86,6 +86,11 @@ fun LiveControlScreen(
                 item {
                     ColorWheelControl(
                         colors = listOf(RgbColor.Coral, RgbColor.Amber, RgbColor.Green, RgbColor.Cyan, RgbColor.Violet, RgbColor.Pink, RgbColor.Coral),
+                        hue = control.hue,
+                        saturation = control.saturation,
+                        onColorSelected = { hue, saturation ->
+                            viewModel.updateHsv(hue = hue, saturation = saturation)
+                        },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 52.dp),
                     )
                 }

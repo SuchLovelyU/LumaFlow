@@ -149,7 +149,7 @@ class ExampleUnitTest {
         val right = matrix.pixels.filter { it.id % matrix.columns == matrix.columns - 1 }.map { it.brightness }.average()
         val uniqueBrightnessValues = matrix.pixels.map { (it.brightness * 100).toInt() }.toSet()
 
-        assertTrue(right > left)
+        assertTrue(left > right)
         assertTrue(uniqueBrightnessValues.size > 2)
     }
 
@@ -315,6 +315,8 @@ private class FakeSensorRepository : SensorRepository {
             shakeIntensity = 0.15f,
         ),
     )
+
+    override fun setMicrophoneEnabled(enabled: Boolean) = Unit
 }
 
 private class FakeBluetoothService : BluetoothService {

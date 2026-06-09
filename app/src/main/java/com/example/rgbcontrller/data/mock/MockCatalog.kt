@@ -49,10 +49,10 @@ object MockCatalog {
     )
 
     val sensorModes = listOf(
-        SensorMode("music", "Music Pulse", "Mic input drives the matrix only after the threshold is crossed.", SensorModeType.Music, listOf("Threshold gate", "Peak pulse", "Spectrum tint")),
-        SensorMode("gravity", "Gravity Fluid", "A continuous liquid surface follows the low side of the phone.", SensorModeType.Gravity, listOf("Fluid surface", "Low-side pooling", "Density color")),
-        SensorMode("gyro", "Gyro Follow", "Gyroscope movement changes the animation direction.", SensorModeType.Gyroscope, listOf("Rotation follow", "Direction track")),
-        SensorMode("shake", "Shake Burst", "Shake intensity triggers bursts and flashes.", SensorModeType.Shake, listOf("Burst", "Spray", "Flash")),
+        SensorMode("music", "Music Pulse", "Mic input drives the matrix only after the threshold is crossed.", SensorModeType.Music, emptyList()),
+        SensorMode("gravity", "Gravity Fluid", "A continuous liquid surface follows the low side of the phone.", SensorModeType.Gravity, emptyList()),
+        SensorMode("gyro", "Gyro Follow", "Gyroscope movement changes the animation direction.", SensorModeType.Gyroscope, emptyList()),
+        SensorMode("shake", "Shake Burst", "Shake intensity triggers bursts and flashes.", SensorModeType.Shake, emptyList()),
     )
 
     val keyframes = listOf(

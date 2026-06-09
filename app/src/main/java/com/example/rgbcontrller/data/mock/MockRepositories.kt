@@ -1,7 +1,16 @@
 package com.example.rgbcontrller.data.mock
 
+import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import androidx.core.content.edit
 import com.example.rgbcontrller.data.bluetooth.AndroidBluetoothService
 import com.example.rgbcontrller.data.bluetooth.BluetoothConnectionEvent
@@ -27,14 +36,14 @@ import com.example.rgbcontrller.domain.repository.SensorRepository
 import com.example.rgbcontrller.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.math.cos
-import kotlin.math.sin
+import kotlin.math.sqrt
 
 class MockLightRepository(
     private val bluetoothService: BluetoothService,
@@ -310,35 +319,176 @@ class MockEffectRepository : EffectRepository {
     override val effects: List<LightEffect> = MockCatalog.effects
 }
 
-class MockSensorRepository(
-    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-) : SensorRepository {
+open class MockSensorRepository : SensorRepository {
     override val modes: List<SensorMode> = MockCatalog.sensorModes
 
-    private val _snapshot = MutableStateFlow(
+    protected val _snapshot = MutableStateFlow(
         SensorSnapshot(
-            microphoneLevel = 0.4f,
-            gravity = Vector3(0f, 0.5f, 0.8f),
-            gyroscope = Vector3(0.1f, 0f, 0.2f),
-            shakeIntensity = 0.15f,
+            microphoneLevel = 0f,
+            gravity = Vector3(0f, 1f, 0f),
+            gyroscope = Vector3(0f, 0f, 0f),
+            shakeIntensity = 0f,
         ),
     )
     override val snapshot: StateFlow<SensorSnapshot> = _snapshot.asStateFlow()
 
+    override fun setMicrophoneEnabled(enabled: Boolean) = Unit
+}
+
+class AndroidSensorRepository(
+    context: Context,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+) : MockSensorRepository(), SensorEventListener {
+    private val appContext = context.applicationContext
+    private val sensorManager = appContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private var microphoneJob: Job? = null
+    private var microphoneEnabled = false
+    private var lastGravity = _snapshot.value.gravity
+    private var lastGyroscope = _snapshot.value.gyroscope
+
     init {
-        scope.launch {
-            var t = 0f
-            while (true) {
-                delay(48)
-                t += 0.07f
-                _snapshot.value = SensorSnapshot(
-                    microphoneLevel = (0.22f + kotlin.math.abs(sin(t * 1.9f)) * 0.78f),
-                    gravity = Vector3(sin(t) * 0.8f, cos(t * 0.75f) * 0.8f, 0.6f),
-                    gyroscope = Vector3(cos(t * 1.2f) * 0.7f, sin(t * 0.9f) * 0.7f, sin(t) * 0.45f),
-                    shakeIntensity = if ((t.toInt() % 5) == 0) 0.85f else kotlin.math.abs(sin(t * 2.6f)) * 0.35f,
+        registerMotionSensors()
+    }
+
+    override fun setMicrophoneEnabled(enabled: Boolean) {
+        microphoneEnabled = enabled && appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (microphoneEnabled) {
+            startMicrophone()
+        } else {
+            stopMicrophone()
+        }
+    }
+
+    override fun onSensorChanged(event: SensorEvent) {
+        when (event.sensor.type) {
+            Sensor.TYPE_GRAVITY, Sensor.TYPE_ACCELEROMETER -> {
+                val gravity = Vector3(
+                    x = (event.values.getOrNull(0) ?: 0f) / SensorGravity,
+                    y = (event.values.getOrNull(1) ?: SensorGravity) / SensorGravity,
+                    z = (event.values.getOrNull(2) ?: 0f) / SensorGravity,
                 )
+                val shake = distance(gravity, lastGravity).coerceIn(0f, 1f)
+                lastGravity = gravity
+                publish(gravity = gravity, shakeIntensity = shake)
+            }
+            Sensor.TYPE_GYROSCOPE -> {
+                val gyroscope = Vector3(
+                    x = event.values.getOrNull(0) ?: 0f,
+                    y = event.values.getOrNull(1) ?: 0f,
+                    z = event.values.getOrNull(2) ?: 0f,
+                )
+                lastGyroscope = gyroscope
+                publish(gyroscope = gyroscope)
             }
         }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
+    private fun registerMotionSensors() {
+        val gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+        (gravitySensor ?: accelerometer)?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+        }
+        gyroscope?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+        }
+    }
+
+    private fun startMicrophone() {
+        if (microphoneJob?.isActive == true) return
+        microphoneJob = scope.launch {
+            val minBuffer = AudioRecord.getMinBufferSize(
+                SampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+            )
+            if (minBuffer <= 0) return@launch
+            val bufferSize = minBuffer.coerceAtLeast(SampleRate / 10)
+            val buffer = ShortArray(bufferSize)
+            val recorder = try {
+                AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    SampleRate,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize * BytesPerSample,
+                )
+            } catch (_: SecurityException) {
+                publish(microphoneLevel = 0f)
+                return@launch
+            } catch (_: IllegalArgumentException) {
+                publish(microphoneLevel = 0f)
+                return@launch
+            }
+
+            try {
+                recorder.startRecording()
+                while (microphoneEnabled) {
+                    val read = recorder.read(buffer, 0, buffer.size)
+                    if (read > 0) {
+                        var sum = 0.0
+                        for (index in 0 until read) {
+                            val sample = buffer[index] / Short.MAX_VALUE.toDouble()
+                            sum += sample * sample
+                        }
+                        val rms = sqrt(sum / read).toFloat()
+                        publish(microphoneLevel = (rms * MicrophoneGain).coerceIn(0f, 1f))
+                    } else {
+                        publish(microphoneLevel = 0f)
+                        delay(40)
+                    }
+                }
+            } catch (_: SecurityException) {
+                publish(microphoneLevel = 0f)
+            } finally {
+                recorder.stopSafely()
+                recorder.release()
+            }
+        }
+    }
+
+    private fun stopMicrophone() {
+        microphoneJob?.cancel()
+        microphoneJob = null
+        publish(microphoneLevel = 0f)
+    }
+
+    private fun publish(
+        microphoneLevel: Float = _snapshot.value.microphoneLevel,
+        gravity: Vector3 = _snapshot.value.gravity,
+        gyroscope: Vector3 = _snapshot.value.gyroscope,
+        shakeIntensity: Float = _snapshot.value.shakeIntensity,
+    ) {
+        _snapshot.value = SensorSnapshot(
+            microphoneLevel = microphoneLevel.coerceIn(0f, 1f),
+            gravity = gravity,
+            gyroscope = gyroscope,
+            shakeIntensity = shakeIntensity.coerceIn(0f, 1f),
+        )
+    }
+
+    private fun distance(a: Vector3, b: Vector3): Float {
+        val dx = a.x - b.x
+        val dy = a.y - b.y
+        val dz = a.z - b.z
+        return sqrt(dx * dx + dy * dy + dz * dz)
+    }
+
+    private fun AudioRecord.stopSafely() {
+        try {
+            if (recordingState == AudioRecord.RECORDSTATE_RECORDING) stop()
+        } catch (_: IllegalStateException) {
+        }
+    }
+
+    private companion object {
+        const val SensorGravity = 9.80665f
+        const val SampleRate = 16_000
+        const val BytesPerSample = 2
+        const val MicrophoneGain = 8f
     }
 }
 
@@ -419,13 +569,15 @@ object AppContainer {
     lateinit var deviceRepository: DeviceRepository
         private set
     val effectRepository: EffectRepository = MockEffectRepository()
-    val sensorRepository: SensorRepository = MockSensorRepository()
+    lateinit var sensorRepository: SensorRepository
+        private set
     lateinit var settingsRepository: SettingsRepository
         private set
 
     fun initialize(context: Context) {
         if (::lightRepository.isInitialized) return
         bluetoothService = AndroidBluetoothService(context)
+        sensorRepository = AndroidSensorRepository(context)
         settingsRepository = SharedPreferencesSettingsRepository(context)
         val sharedDeviceState = MutableStateFlow(MockCatalog.device)
         lightRepository = MockLightRepository(
@@ -436,5 +588,11 @@ object AppContainer {
             keyframeStore = SharedPreferencesKeyframeStore(context),
         )
         deviceRepository = MockDeviceRepository(bluetoothService, sharedDeviceState)
+    }
+
+    fun setMicrophoneEnabled(enabled: Boolean) {
+        if (::sensorRepository.isInitialized) {
+            sensorRepository.setMicrophoneEnabled(enabled)
+        }
     }
 }

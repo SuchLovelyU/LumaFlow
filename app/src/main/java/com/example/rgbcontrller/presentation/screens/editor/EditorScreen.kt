@@ -1,12 +1,16 @@
 package com.example.rgbcontrller.presentation.screens.editor
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -16,11 +20,10 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -192,16 +196,16 @@ fun EditorScreen(
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            FilledTonalIconButton(onClick = viewModel::togglePlayback) {
+                            EditorToolButton(onClick = viewModel::togglePlayback, emphasized = true) {
                                 Icon(
                                     if (state.playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                                     contentDescription = if (state.playback.isPlaying) "Pause" else "Play",
                                 )
                             }
-                            FilledTonalIconButton(onClick = viewModel::addKeyframe) {
+                            EditorToolButton(onClick = viewModel::addKeyframe, emphasized = true) {
                                 Icon(Icons.Filled.Add, contentDescription = "Add keyframe")
                             }
-                            OutlinedIconButton(
+                            EditorToolButton(
                                 enabled = viewModel.selectedId != null,
                                 onClick = viewModel::duplicateSelected,
                             ) {
@@ -210,19 +214,19 @@ fun EditorScreen(
                         }
                         val selectedIndex = viewModel.keyframes.indexOfFirst { it.id == viewModel.selectedId }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            OutlinedIconButton(
+                            EditorToolButton(
                                 enabled = selectedIndex > 0,
                                 onClick = viewModel::moveSelectedLeft,
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Move keyframe left")
                             }
-                            OutlinedIconButton(
+                            EditorToolButton(
                                 enabled = selectedIndex >= 0 && selectedIndex < viewModel.keyframes.lastIndex,
                                 onClick = viewModel::moveSelectedRight,
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Move keyframe right")
                             }
-                            OutlinedIconButton(
+                            EditorToolButton(
                                 enabled = viewModel.selectedId != null,
                                 onClick = viewModel::deleteSelected,
                             ) {
@@ -262,4 +266,35 @@ fun EditorScreen(
             }
         }
     }
+}
+
+@Composable
+private fun EditorToolButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    emphasized: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.size(64.dp),
+        shape = CircleShape,
+        color = if (emphasized) colorScheme.primaryContainer else colorScheme.surface,
+        contentColor = when {
+            !enabled -> colorScheme.onSurface.copy(alpha = 0.32f)
+            emphasized -> colorScheme.onPrimaryContainer
+            else -> colorScheme.onSurface
+        },
+        border = if (emphasized) null else BorderStroke(1.dp, colorScheme.outline.copy(alpha = 0.34f)),
+        shadowElevation = 2.dp,
+        tonalElevation = if (emphasized) 1.dp else 0.dp,
+        content = {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                content()
+            }
+        },
+    )
 }

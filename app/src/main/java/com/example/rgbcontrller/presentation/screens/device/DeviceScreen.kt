@@ -19,8 +19,9 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -106,7 +108,7 @@ fun DeviceScreen(
                     DeviceStatusHeader(device, onClick = onOpenSettings)
                 }
                 item {
-                    ElevatedCard(Modifier.fillMaxWidth()) {
+                    WhiteCard {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             InfoRow("Device name", device.name)
                             InfoRow("Firmware", device.firmwareVersion)
@@ -174,7 +176,7 @@ fun DeviceScreen(
                 }
                 if (devices.isEmpty()) {
                     item {
-                        ElevatedCard(Modifier.fillMaxWidth()) {
+                        WhiteCard {
                             Text(
                                 "Tap Scan. Paired UART modules will appear first.",
                                 modifier = Modifier.padding(18.dp),
@@ -184,7 +186,7 @@ fun DeviceScreen(
                     }
                 } else {
                     items(devices, key = { it.address }) { bluetoothDevice ->
-                        ElevatedCard(Modifier.fillMaxWidth()) {
+                        WhiteCard {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 InfoRow(bluetoothDevice.name ?: "Unknown device", bluetoothDevice.address)
                                 InfoRow("Pairing", if (bluetoothDevice.isBonded) "Paired" else "Discovered")
@@ -202,6 +204,17 @@ fun DeviceScreen(
             }
         }
     }
+}
+
+@Composable
+private fun WhiteCard(content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        content = { content() },
+    )
 }
 
 @Composable

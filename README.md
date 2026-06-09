@@ -1,302 +1,174 @@
-# RGB Controller Project Notes
+# RGB Controller
 
-## Project Goal
+Android app for controlling a small RGB LED matrix over Bluetooth Low Energy.
 
-This is a phone-only Android app for controlling an RGB LED matrix over Bluetooth.
+The current hardware target is a 2 x 4 RGB LED matrix. The app is still built around a local rendering engine so UI, effects, sensors, and editor behavior can be developed and tested before every Bluetooth transport detail is finalized.
 
-Current hardware target:
+## Current State
 
-- 2 x 4 LED matrix
-- 8 LEDs total
-- Each LED is expected to support RGB color, brightness, and dynamic effect parameters
-- Future hardware may increase LED count
+- Kotlin Android app using Jetpack Compose and Material 3.
+- Bottom navigation contains Home, Live, and Editor.
+- Home combines the former effects and sensor-mode surfaces into one control screen.
+- Device and Settings are secondary screens.
+- Debug APK output is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
-Current development priority:
+## Main Features
 
-- High-quality frontend UI and interaction prototype
-- Local mock data only
-- No real Bluetooth communication yet
-- No backend
+- Real-time LED matrix preview for an 8 LED, 2 x 4 layout.
+- Effect catalog with animated preview cards.
+- Sensor modes integrated into Home:
+  - Music Pulse uses microphone RMS level and a configurable threshold. LEDs remain off below the threshold.
+  - Gravity Fluid uses gravity or accelerometer data to simulate a continuous liquid surface.
+  - Gyro Follow uses gyroscope motion for directional behavior.
+  - Shake Burst reacts to detected movement intensity.
+- Live Control with direct HSV color-wheel picking, RGB sliders, brightness, speed, and direction controls.
+- Editor with keyframe playback, add, duplicate, move, delete, duration, color, and brightness controls.
+- BLE scanning, connection, frame sending, and all-LED color commands behind `BluetoothService`.
+- Light theme with subtle tinted background, white card surfaces, rounded corners, shadows, and restrained selected states.
+
+## Permissions And Sensors
+
+Declared Android permissions include:
+
+- `BLUETOOTH`, `BLUETOOTH_ADMIN`, and `ACCESS_FINE_LOCATION` for older Android versions.
+- `BLUETOOTH_SCAN` and `BLUETOOTH_CONNECT` for newer Android versions.
+- `RECORD_AUDIO` for Music Pulse.
+
+Declared hardware features:
+
+- Bluetooth LE is required.
+- Microphone is optional.
+- Accelerometer is optional.
+
+At runtime, `MainActivity` requests Bluetooth and microphone permissions where required by the Android version.
 
 ## Tech Stack
 
-- Android 16 / API 36
 - Kotlin
 - Jetpack Compose
 - Material 3
 - Navigation Compose
 - ViewModel
 - StateFlow
-- MVVM-style separation
-- Dynamic color and dark mode support via Compose Material 3 theme
+- Android sensors
+- AudioRecord
+- Bluetooth LE GATT
 
-## Current Git Baseline
+Project config:
 
-Initial committed version:
+- `applicationId`: `com.example.rgbcontrller`
+- `minSdk`: 26
+- `versionName`: `1.0`
 
-```text
-a706033 Initial RGB LED controller Compose app
-```
+## Project Layout
 
-The current project has been reset back to this baseline after a rejected UI refinement attempt. Future UI changes should be more carefully scoped and reviewed against screenshots before committing.
-
-## Current App Structure
-
-Main app entry:
+Main entry point:
 
 ```text
 app/src/main/java/com/example/rgbcontrller/MainActivity.kt
 ```
 
-Main package layout:
+Package layout:
 
 ```text
 com.example.rgbcontrller/
   data/
     bluetooth/
     mock/
-
   domain/
     engine/
     model/
     repository/
-
   presentation/
     navigation/
     screens/
     ui/components/
-
   ui/theme/
 ```
 
-## Screens Implemented
-
-The app currently contains these screens:
-
-- Dashboard
-- Effects
-- Effect detail
-- Live Control
-- Sensor Modes
-- Sensor mode detail
-- Editor
-- Device
-- Settings
-
-Bottom navigation includes:
-
-- Home
-- Effects
-- Live
-- Sensors
-- Editor
-
-Device and Settings are secondary screens.
-
-## Navigation
-
-Navigation is defined in:
+Important files:
 
 ```text
 app/src/main/java/com/example/rgbcontrller/presentation/navigation/AppNavigation.kt
+app/src/main/java/com/example/rgbcontrller/presentation/screens/dashboard/DashboardScreen.kt
+app/src/main/java/com/example/rgbcontrller/presentation/screens/live/LiveControlScreen.kt
+app/src/main/java/com/example/rgbcontrller/presentation/screens/editor/EditorScreen.kt
+app/src/main/java/com/example/rgbcontrller/presentation/ui/components/CoreComponents.kt
+app/src/main/java/com/example/rgbcontrller/domain/engine/LightEngine.kt
+app/src/main/java/com/example/rgbcontrller/data/mock/MockRepositories.kt
+app/src/main/java/com/example/rgbcontrller/data/bluetooth/AndroidBluetoothService.kt
 ```
 
-Routes:
+## Screens
+
+Current navigation routes:
 
 ```text
 dashboard
-effects
-effect/{effectId}
 live
-sensors
-sensor/{modeId}
 editor
 device
 settings
 ```
 
-Screens do not directly own app architecture decisions. They receive navigation callbacks such as:
+Home is the primary control surface. It owns the LED preview, device header, sensor modes, effect cards, and contextual controls for Music Pulse and Gravity Fluid.
 
-- `onOpenDevice`
-- `onOpenEffect`
-- `onOpenMode`
-- `onOpenSettings`
+## Rendering Engine
 
-## Domain Models
-
-Defined in:
-
-```text
-app/src/main/java/com/example/rgbcontrller/domain/model/LightModels.kt
-```
-
-Important models:
-
-- `RgbColor`
-- `LedPixel`
-- `LedMatrix`
-- `DeviceInfo`
-- `LightEffect`
-- `LiveControl`
-- `SensorMode`
-- `SensorSnapshot`
-- `Keyframe`
-- `LightSessionState`
-
-The app is currently centered around `LightSessionState`, which contains:
-
-- Current mock device
-- Current LED matrix frame
-- Active effect
-- Live control values
-- Playback state
-
-## Mock Data
-
-Mock catalog:
-
-```text
-app/src/main/java/com/example/rgbcontrller/data/mock/MockCatalog.kt
-```
-
-Mock repositories:
-
-```text
-app/src/main/java/com/example/rgbcontrller/data/mock/MockRepositories.kt
-```
-
-Mock data includes:
-
-- Device info
-- Effect catalog
-- Dashboard shortcuts
-- Sensor modes
-- Editor keyframes
-
-`MockLightRepository` continuously emits animated LED matrix frames through `StateFlow`.
-
-## Light Engine
-
-Local rendering engine:
+The local light engine lives in:
 
 ```text
 app/src/main/java/com/example/rgbcontrller/domain/engine/LightEngine.kt
 ```
 
-Purpose:
+It renders `LedMatrix` frames for the 2 x 4 target and supports static, dynamic, music, gravity, shake, direction, and ambient-style effects.
 
-- Generate animated `LedMatrix` frames
-- Support mock effects such as solid, blink, flow, meteor, music, flame, aurora, etc.
-- Keep UI interactive before real Bluetooth protocol exists
+The active page owns the active render mode. Switching between Home, Live, and Editor applies only that page's selected/default effect so effects do not stack across tabs.
 
-Current frame target:
+## Bluetooth
 
-```text
-rows = 2
-columns = 4
-```
-
-Future improvement:
-
-- Make matrix dimensions configurable per device
-- Separate effect calculation from frame transport
-- Add protocol-ready frame serialization
-
-## Bluetooth Boundary
-
-Bluetooth is not implemented yet.
-
-Reserved interface:
+Bluetooth transport is represented by:
 
 ```text
 app/src/main/java/com/example/rgbcontrller/data/bluetooth/BluetoothService.kt
+app/src/main/java/com/example/rgbcontrller/data/bluetooth/AndroidBluetoothService.kt
 ```
 
-Current interface shape:
+The service supports:
 
-- `scan()`
-- `connect(deviceAddress)`
-- `disconnect()`
-- `sendFrame(matrix)`
-- `connectionEvents`
+- BLE scan
+- Connect and disconnect
+- Discovered device list
+- Connection events
+- Matrix frame sending
+- Send-all color and brightness commands
 
-Future BLE work should plug into repositories without rewriting UI screens.
+UI and rendering logic talk through repository interfaces so the Bluetooth implementation can continue to evolve without rewriting screens.
 
-## UI Components
+## Build
 
-Shared components live in:
+Run unit tests:
 
-```text
-app/src/main/java/com/example/rgbcontrller/presentation/ui/components/CoreComponents.kt
+```powershell
+.\gradlew.bat test
 ```
-
-Important components:
-
-- `AuroraBackground`
-- `DeviceStatusHeader`
-- `LedMatrixPreview`
-- `SceneShortcutCard`
-- `EffectMarketCard`
-- `MiniEffectPreview`
-- `ColorWheelControl`
-- `ExpressiveSlider`
-- `DirectionSegmentedControl`
-- `SensorModeCard`
-- `SensorPreview`
-- `TimelineEditor`
-- `PageTitle`
-
-Current UI is a working first prototype, not a final polished visual system.
-
-## Theme
-
-Theme files:
-
-```text
-app/src/main/java/com/example/rgbcontrller/ui/theme/Color.kt
-app/src/main/java/com/example/rgbcontrller/ui/theme/Theme.kt
-app/src/main/java/com/example/rgbcontrller/ui/theme/Type.kt
-```
-
-Current theme supports:
-
-- Material 3 color scheme
-- Dynamic color when available
-- Light and dark color schemes
-
-## Known UI Issues
-
-From screenshot review, the initial committed UI has several areas needing improvement:
-
-- Bottom navigation uses text placeholders instead of proper icons
-- Some card proportions feel oversized
-- Some pages have too much empty vertical space
-- Some text can crowd or wrap poorly
-- LED preview is visually interesting but not yet product-grade
-- Effects and sensor cards need stronger hierarchy
-- Editor needs a more professional timeline/control surface
-
-Important: A previous broad UI refactor was rejected as a visual regression. Future UI refinement should be incremental and screenshot-driven.
-
-## Recommended UI Refinement Strategy
-
-Use small, reviewable steps:
-
-1. Fix only the bottom navigation icons and content insets.
-2. Fix obvious text overflow issues, especially Device info rows.
-3. Improve `LedMatrixPreview` while preserving the existing visual direction.
-4. Refine Dashboard shortcut cards.
-5. Refine Effects list cards.
-6. Refine Live Control layout.
-7. Refine Editor timeline.
-
-Avoid changing all visual language at once.
-
-## Build Commands
 
 Build debug APK:
 
 ```powershell
+.\gradlew.bat assembleDebug
+```
+
+APK output:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+If Windows keeps serving an old APK, delete the existing output first and rebuild:
+
+```powershell
+Remove-Item -LiteralPath "app\build\outputs\apk\debug\app-debug.apk" -Force
 .\gradlew.bat assembleDebug
 ```
 
@@ -306,38 +178,21 @@ Stop Gradle daemon:
 .\gradlew.bat --stop
 ```
 
-If build fails with:
-
-```text
-Unable to delete app/build/outputs/apk/debug/app-debug.apk
-```
-
-This usually means Windows has locked the old APK. Close Android Studio APK Analyzer, file preview windows, emulator install tasks, or restart Android Studio.
-
-## Git Notes
-
-Current repository was initialized locally.
+## Git
 
 Useful commands:
 
 ```powershell
 git status --short
 git log --oneline
-git reset --hard a706033
 ```
 
-Do not commit broad UI changes unless they have been visually reviewed.
+Before committing UI work, build the debug APK and visually review the installed app because many changes are interaction and visual-quality sensitive.
 
-## Next Development Priorities
+## Next Priorities
 
-Recommended next steps:
-
-1. Establish visual acceptance criteria using screenshots.
-2. Add real icons carefully, without changing layout proportions.
-3. Fix Device info row overflow.
-4. Add preview screenshots or Compose previews for key components.
-5. Add DataStore for Settings.
-6. Make LED matrix size configurable.
-7. Add Bluetooth repository implementation behind existing interfaces.
-8. Add keyframe editing and drag sorting in Editor.
-
+- Validate BLE frame format against real hardware.
+- Add stronger diagnostics for sensor availability and permission denial.
+- Add Compose previews or screenshot tests for Home cards and editor controls.
+- Make matrix dimensions configurable per device.
+- Improve editor timeline manipulation with drag sorting.

@@ -10,8 +10,8 @@ val GlowPink = Color(0xFFFF4FD8)
 val GlowAmber = Color(0xFFFFB74D)
 val SpaceDark = Color(0xFF101114)
 val SpaceDarkAlt = Color(0xFF181B22)
-val CloudLight = Color(0xFFF7F8FA)
-val CloudLightAlt = Color(0xFFEAF2F6)
+val CloudLight = Color(0xFFF6F9FD)
+val CloudLightAlt = Color(0xFFEFF5FB)
 
 val Purple80 = NeonViolet
 val PurpleGrey80 = Color(0xFFC8D0E2)

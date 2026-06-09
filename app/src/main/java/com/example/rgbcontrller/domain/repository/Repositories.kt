@@ -38,6 +38,7 @@ interface EffectRepository {
 interface SensorRepository {
     val modes: List<SensorMode>
     val snapshot: StateFlow<SensorSnapshot>
+    fun setMicrophoneEnabled(enabled: Boolean)
 }
 
 interface SettingsRepository {

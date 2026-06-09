@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -84,18 +86,23 @@ fun SettingsScreen(
                         PageTitle(
                             title = "Settings",
                             modifier = Modifier.weight(1f),
-                            subtitle = "Personalize theme, motion and controller defaults",
+                            subtitle = "Personalize motion and controller defaults",
                         )
                     }
                 }
                 item {
-                    ElevatedCard(Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                    ) {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            PreferenceSwitch("深色模式", "Use a darker light-control cockpit", settings.darkMode, viewModel::updateDarkMode)
-                            PreferenceSwitch("动态主题", "Follow system Material You color", settings.dynamicTheme, viewModel::updateDynamicTheme)
-                            PreferenceSwitch("开发者模式", "Show mock diagnostics and future BLE tools", settings.developerMode, viewModel::updateDeveloperMode)
-                            ExpressiveSlider("动画速度", settings.animationSpeed, viewModel::updateAnimationSpeed)
-                            ExpressiveSlider("默认亮度", settings.defaultBrightness, viewModel::updateDefaultBrightness)
+                            PreferenceSwitch("Dark mode", "Use a darker light-control cockpit", settings.darkMode, viewModel::updateDarkMode)
+                            PreferenceSwitch("Dynamic theme", "Stored only; the app uses a fixed white light theme", settings.dynamicTheme, viewModel::updateDynamicTheme)
+                            PreferenceSwitch("Developer mode", "Show diagnostics and future BLE tools", settings.developerMode, viewModel::updateDeveloperMode)
+                            ExpressiveSlider("Animation speed", settings.animationSpeed, viewModel::updateAnimationSpeed)
+                            ExpressiveSlider("Default brightness", settings.defaultBrightness, viewModel::updateDefaultBrightness)
                         }
                     }
                 }

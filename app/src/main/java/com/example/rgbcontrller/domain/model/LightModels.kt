@@ -133,7 +133,7 @@ data class PlaybackState(
 
 data class AppSettings(
     val darkMode: Boolean = false,
-    val dynamicTheme: Boolean = true,
+    val dynamicTheme: Boolean = false,
     val developerMode: Boolean = false,
     val animationSpeed: Float = 0.72f,
     val defaultBrightness: Float = 0.78f,
