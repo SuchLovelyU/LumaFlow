@@ -1,93 +1,129 @@
+<div align="center">
+
 # LumaFlow
 
-LumaFlow 是一个用于通过 Bluetooth Low Energy 控制 2 x 4 WS2812 RGB 灯板的 Android 应用。应用内置实时渲染引擎、手机端灯板预览、传感器互动效果和关键帧编辑器，方便在手机上调试灯效并把最终帧发送到硬件。
+### A tactile Android controller for a tiny WS2812 light matrix
 
-当前项目仍以 8 颗 LED 的 2 x 4 矩阵为主要目标硬件，协议说明见 [BLUETOOTH_WS2812_PROTOCOL.md](BLUETOOTH_WS2812_PROTOCOL.md)。
+把手机变成 2 x 4 RGB 灯板的实时控制台：选效果、调颜色、用传感器驱动灯光，再通过 BLE 把每一帧送到硬件。
 
-## 功能特性
+[![Android](https://img.shields.io/badge/Android-26+-3DDC84?style=flat-square&logo=android&logoColor=white)](#)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](#)
+[![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](#)
+[![BLE](https://img.shields.io/badge/Bluetooth-LE-0082FC?style=flat-square&logo=bluetooth&logoColor=white)](#)
 
-- 2 x 4 LED 矩阵实时预览，预览只展示当前效果本身的亮度变化，不叠加全局亮度限制。
-- BLE 扫描、连接、断开、整帧发送和全灯颜色命令。
-- Home 页面集成效果选择、传感器模式和设备状态。
-- Live Control 支持颜色盘、RGB 调节、亮度和速度控制。
-- Editor 支持关键帧播放、添加、复制、移动、删除、时长、颜色和亮度编辑。
-- Editor 支持保存历史预设、选择预设、删除预设，以及导入/导出关键帧配置文件。
-- 颜色编辑使用弹窗式取色器，保持和应用 Material 3 风格一致。
-- 全局最大亮度限制只作用于硬件输出，适合高亮 LED 灯板的实际使用。
-- 动画速度滑动时保持连续时钟推进，避免当前颜色突然跳变。
-- 呼吸灯使用非线性亮度曲线，让亮度在 255 到 0 再回到 255 的过程更自然。
-- 重力模式使用连续采样计算中间亮度，并针对实际 2 x 4 灯板做物理 LED 顺序映射。
+</div>
 
-## 主要效果
+---
 
-- Static：固定颜色和亮度。
-- Breath：非线性呼吸亮度变化。
-- Runner / Wave / Sparkle：带速度控制的动态灯效。
-- Music Pulse：根据麦克风 RMS 音量触发灯光。
-- Gravity Fluid：根据手机倾斜方向模拟连续液面。
-- Gyro Follow：根据陀螺仪方向变化生成动态响应。
-- Shake Burst：根据晃动强度触发亮度爆发。
+## What It Is
 
-## 硬件与权限
+LumaFlow 是一个面向 **2 x 4 WS2812 RGB LED 矩阵** 的 Android 控制 App。它不只是发颜色值，而是在手机端完整渲染灯效、预览矩阵状态、读取传感器输入，并通过 BLE 把最终灯光帧发送到 FPGA 或下位机。
 
-目标硬件：
+这个项目的核心目标是：让小灯板的调试像调一个真正的灯光乐器一样直观。
 
-- 8 颗 WS2812 RGB LED。
-- 物理布局为 2 行 4 列。
-- App 通过 BLE GATT 向蓝牙串口模块发送二进制帧。
-- FPGA 或下位机侧按 `AA 55 CMD PAYLOAD CS` 协议解析命令。
+## Highlights
 
-Android 权限：
+| Area | Details |
+| --- | --- |
+| Live Control | 颜色盘、RGB 滑条、亮度、速度控制，适合快速试色和现场调光 |
+| Effect Engine | Static、Breath、Runner、Wave、Sparkle、Music、Gravity、Gyro、Shake 等效果 |
+| Editor | 关键帧时间轴、预设保存/选择/删除、配置导入/导出、弹窗取色器 |
+| Preview | 手机预览只显示效果自身亮度，不叠加全局亮度限制，细微变化更容易看见 |
+| Hardware Safety | 全局最大亮度只作用在硬件输出端，适合高亮 WS2812 灯板 |
+| Smooth Motion | 动画时钟连续推进，速度滑动不会导致当前颜色突然跳变 |
+| Gravity Fluid | 根据手机倾斜做连续亮度采样，并映射到实际 2 x 4 灯板布线 |
+| BLE Protocol | 使用 `AA 55 CMD PAYLOAD CS` 二进制帧协议，支持整帧发送 |
 
-- `BLUETOOTH`、`BLUETOOTH_ADMIN`、`ACCESS_FINE_LOCATION`：兼容较旧 Android 版本。
-- `BLUETOOTH_SCAN`、`BLUETOOTH_CONNECT`：Android 12 及以上蓝牙权限。
-- `RECORD_AUDIO`：Music Pulse 音乐模式。
+## Light Effects
 
-硬件特性：
+| Effect | Behavior | Tunable |
+| --- | --- | --- |
+| Static | 固定颜色和亮度 | Color, Brightness |
+| Breath | 非线性 255 -> 0 -> 255 呼吸曲线 | Color, Speed, Brightness |
+| Runner | 沿矩阵移动的跑灯 | Speed, Color |
+| Wave | 波形亮度流动 | Speed, Color |
+| Sparkle | 随机闪烁颗粒感 | Speed, Color |
+| Music Pulse | 麦克风 RMS 音量触发 | Threshold, Color |
+| Gravity Fluid | 手机倾斜驱动连续液面 | Sensor Tilt, Color |
+| Gyro Follow | 陀螺仪方向响应 | Motion, Color |
+| Shake Burst | 晃动强度触发亮度爆发 | Motion, Color |
 
-- Bluetooth LE 必需。
-- 麦克风可选。
-- 加速度计和陀螺仪可选。
+## Interaction Model
 
-## 技术栈
+```mermaid
+flowchart LR
+    Sensor["Sensors\nMic / Gravity / Gyro"] --> Engine["LightEngine"]
+    Live["Live Control"] --> Engine
+    Editor["Keyframe Editor"] --> Engine
+    Effects["Effect Catalog"] --> Engine
+    Engine --> Preview["Phone Preview\nraw effect brightness"]
+    Engine --> Output["BLE Output\nmaster brightness limited"]
+    Output --> Board["2 x 4 WS2812 Matrix"]
+```
 
-- Kotlin
-- Jetpack Compose
-- Material 3
-- Navigation Compose
-- ViewModel
-- StateFlow
-- Android Sensor APIs
-- AudioRecord
-- Bluetooth LE GATT
+## Hardware Output Pipeline
 
-项目配置：
+```mermaid
+flowchart TD
+    A["Render logical LedMatrix"] --> B["Keep raw frame for phone preview"]
+    A --> C["Apply master brightness limit"]
+    C --> D["Premultiply RGB brightness"]
+    D --> E["Map logical LEDs to physical 2 x 4 order"]
+    E --> F["Pack WS2812 BLE frame"]
+    F --> G["Send to board"]
+```
 
-- `applicationId`: `com.example.rgbcontrller`
-- `minSdk`: 26
-- `targetSdk`: 36
-- `versionName`: `1.0`
+## Screens
 
-## 项目结构
+| Screen | Purpose |
+| --- | --- |
+| Home | 效果选择、传感器模式、设备状态和矩阵预览 |
+| Live | 即时调色、调亮度、调速度 |
+| Editor | 关键帧动画制作、预设管理、配置导入导出 |
+| Device | BLE 设备扫描、连接和状态查看 |
+| Settings | 全局亮度限制、动画速度等应用级参数 |
+
+## Tech Stack
+
+| Layer | Tech |
+| --- | --- |
+| Language | Kotlin |
+| UI | Jetpack Compose, Material 3 |
+| State | ViewModel, StateFlow |
+| Navigation | Navigation Compose |
+| Sensors | Android Sensor APIs, AudioRecord |
+| Transport | Bluetooth LE GATT |
+| Hardware Protocol | WS2812 frame protocol over BLE serial |
+
+Project config:
+
+```text
+applicationId = com.example.rgbcontrller
+minSdk        = 26
+targetSdk     = 36
+versionName   = 1.0
+```
+
+## Project Layout
 
 ```text
 app/src/main/java/com/example/rgbcontrller/
   MainActivity.kt
   data/
-    bluetooth/       BLE 服务和 WS2812 协议打包
-    mock/            仓库实现、传感器采样、动画时钟和本地状态
+    bluetooth/       BLE service and WS2812 protocol packing
+    mock/            repositories, sensors, animation clocks, local stores
   domain/
-    engine/          灯效渲染引擎
-    model/           UI、灯效、设备、传感器和关键帧模型
-    repository/      仓库接口
+    engine/          effect renderer
+    model/           app, device, light, sensor, keyframe models
+    repository/      repository contracts
   presentation/
-    navigation/      Compose 导航
-    screens/         Home、Live、Editor、Device、Settings 页面
-    ui/components/   通用 Compose 组件
-  ui/theme/          主题、颜色和字体
+    navigation/      Compose navigation
+    screens/         Home, Live, Editor, Device, Settings
+    ui/components/   shared UI controls and matrix preview
+  ui/theme/          color, type, Material theme
 ```
 
-关键文件：
+Important files:
 
 ```text
 app/src/main/java/com/example/rgbcontrller/domain/engine/LightEngine.kt
@@ -99,78 +135,61 @@ app/src/main/java/com/example/rgbcontrller/presentation/screens/live/LiveControl
 app/src/main/java/com/example/rgbcontrller/presentation/screens/editor/EditorScreen.kt
 ```
 
-## 渲染与输出策略
+## Build
 
-应用内部先由 `LightEngine` 生成完整的 `LedMatrix`，再分别用于手机预览和 BLE 发送。
-
-- 手机预览：显示效果原始亮度，方便观察呼吸、重力等细微变化。
-- 硬件输出：发送前应用全局最大亮度限制，避免实体灯板刺眼。
-- BLE 帧：对每颗灯的 RGB 做亮度预乘，兼容忽略独立亮度字节的下位机实现。
-- 重力模式：手机预览和硬件输出使用同一逻辑帧，硬件发送前再做 2 x 4 灯板物理顺序映射。
-
-## 构建
-
-运行单元测试：
+Run tests:
 
 ```powershell
 .\gradlew.bat test
 ```
 
-构建 Debug APK：
+Build debug APK:
 
 ```powershell
 .\gradlew.bat assembleDebug
 ```
 
-APK 输出位置：
+APK output:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-如果 Windows 仍显示旧 APK，可以先删除输出文件再重新构建：
+If Windows keeps showing an old APK, remove the previous output first:
 
 ```powershell
 Remove-Item -LiteralPath "app\build\outputs\apk\debug\app-debug.apk" -Force
 .\gradlew.bat assembleDebug
 ```
 
-停止 Gradle daemon：
+## BLE Protocol
 
-```powershell
-.\gradlew.bat --stop
+The hardware protocol is documented in [BLUETOOTH_WS2812_PROTOCOL.md](BLUETOOTH_WS2812_PROTOCOL.md).
+
+Frame shape:
+
+```text
+AA 55 CMD PAYLOAD CS
 ```
 
-## 测试
+The app sends binary bytes, not ASCII hex strings. For animated effects, it uses the 8 LED frame command so every LED can carry its own RGB and brightness state.
 
-当前单元测试覆盖：
+## Test Coverage
 
-- WS2812 协议帧和校验。
-- 2 x 4 灯板物理映射。
-- 全局亮度限制和硬件 RGB 预乘。
-- 呼吸灯和动态效果亮度行为。
-- 重力模式连续亮度变化。
-- 编辑器关键帧、预设、导入和导出。
-- 设置仓库和传感器相关状态。
+Current unit tests cover:
 
-## Git 常用命令
+- WS2812 frame packing and checksum.
+- 2 x 4 physical LED mapping.
+- Master brightness limiting and RGB premultiplication.
+- Breathing and dynamic effect brightness behavior.
+- Continuous brightness in gravity mode.
+- Editor keyframes, presets, import, and export.
+- Settings repository and sensor-related state.
 
-```powershell
-git status --short
-git log --oneline
-```
+## Roadmap
 
-提交前建议至少运行：
-
-```powershell
-.\gradlew.bat test
-.\gradlew.bat assembleDebug
-```
-
-## 后续方向
-
-- 增加真实设备连接诊断和错误提示。
-- 为关键页面补充 Compose Preview 或截图测试。
-- 支持不同尺寸和不同物理布线方式的灯板配置。
-- 优化 Editor 时间轴的拖拽排序和批量编辑。
-- 为硬件协议文档补充实际 BLE 服务 UUID、特征 UUID 和调试流程截图。
+- Add stronger BLE diagnostics and connection error messages.
+- Add Compose previews or screenshot tests for important screens.
+- Make matrix size and physical wiring configurable per device.
+- Improve Editor timeline drag sorting and batch editing.
+- Add real BLE service UUID and characteristic UUID details to the hardware protocol document.
