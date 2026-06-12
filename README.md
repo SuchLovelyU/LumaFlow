@@ -1,87 +1,193 @@
-<div align="center">
+<p align="center">
+  <img src="./app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp" width="96" alt="LumaFlow app icon" />
+</p>
 
-# LumaFlow
+<h1 align="center">LumaFlow</h1>
 
-### A tactile Android controller for a tiny WS2812 light matrix
+<p align="center">
+  <strong>A polished Android light controller for a 2 x 4 WS2812 RGB matrix.</strong>
+</p>
 
-把手机变成 2 x 4 RGB 灯板的实时控制台：选效果、调颜色、用传感器驱动灯光，再通过 BLE 把每一帧送到硬件。
+<p align="center">
+  Live color control, sensor-driven effects, keyframe editing, and BLE hardware output in one compact app.
+</p>
 
-[![Android](https://img.shields.io/badge/Android-26+-3DDC84?style=flat-square&logo=android&logoColor=white)](#)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](#)
-[![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](#)
-[![BLE](https://img.shields.io/badge/Bluetooth-LE-0082FC?style=flat-square&logo=bluetooth&logoColor=white)](#)
+<p align="center">
+  <a href="#quick-start"><img alt="Android" src="https://img.shields.io/badge/Android-26+-3DDC84?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href="#tech-stack"><img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white"></a>
+  <a href="#tech-stack"><img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white"></a>
+  <a href="./BLUETOOTH_WS2812_PROTOCOL.md"><img alt="Bluetooth LE" src="https://img.shields.io/badge/Bluetooth-LE-0082FC?style=for-the-badge&logo=bluetooth&logoColor=white"></a>
+</p>
 
-</div>
+<p align="center">
+  <a href="#why-lumaflow">Why LumaFlow</a>
+  ·
+  <a href="#screens">Screens</a>
+  ·
+  <a href="#architecture">Architecture</a>
+  ·
+  <a href="#quick-start">Quick Start</a>
+  ·
+  <a href="./BLUETOOTH_WS2812_PROTOCOL.md">Protocol</a>
+</p>
 
----
+<p align="center">
+  <img src="./docs/assets/readme/showcase.jpg" alt="LumaFlow Android app screens" />
+</p>
 
-## What It Is
+## Why LumaFlow
 
-LumaFlow 是一个面向 **2 x 4 WS2812 RGB LED 矩阵** 的 Android 控制 App。它不只是发颜色值，而是在手机端完整渲染灯效、预览矩阵状态、读取传感器输入，并通过 BLE 把最终灯光帧发送到 FPGA 或下位机。
+LumaFlow turns a phone into a real-time control surface for a small RGB matrix. It renders light effects locally, previews the 2 x 4 LED layout on screen, reads motion and microphone input, then streams the final frame to hardware over Bluetooth LE.
 
-这个项目的核心目标是：让小灯板的调试像调一个真正的灯光乐器一样直观。
-
-## Highlights
-
-| Area | Details |
-| --- | --- |
-| Live Control | 颜色盘、RGB 滑条、亮度、速度控制，适合快速试色和现场调光 |
-| Effect Engine | Static、Breath、Runner、Wave、Sparkle、Music、Gravity、Gyro、Shake 等效果 |
-| Editor | 关键帧时间轴、预设保存/选择/删除、配置导入/导出、弹窗取色器 |
-| Preview | 手机预览只显示效果自身亮度，不叠加全局亮度限制，细微变化更容易看见 |
-| Hardware Safety | 全局最大亮度只作用在硬件输出端，适合高亮 WS2812 灯板 |
-| Smooth Motion | 动画时钟连续推进，速度滑动不会导致当前颜色突然跳变 |
-| Gravity Fluid | 根据手机倾斜做连续亮度采样，并映射到实际 2 x 4 灯板布线 |
-| BLE Protocol | 使用 `AA 55 CMD PAYLOAD CS` 二进制帧协议，支持整帧发送 |
-
-## Light Effects
-
-| Effect | Behavior | Tunable |
-| --- | --- | --- |
-| Static | 固定颜色和亮度 | Color, Brightness |
-| Breath | 非线性 255 -> 0 -> 255 呼吸曲线 | Color, Speed, Brightness |
-| Runner | 沿矩阵移动的跑灯 | Speed, Color |
-| Wave | 波形亮度流动 | Speed, Color |
-| Sparkle | 随机闪烁颗粒感 | Speed, Color |
-| Music Pulse | 麦克风 RMS 音量触发 | Threshold, Color |
-| Gravity Fluid | 手机倾斜驱动连续液面 | Sensor Tilt, Color |
-| Gyro Follow | 陀螺仪方向响应 | Motion, Color |
-| Shake Burst | 晃动强度触发亮度爆发 | Motion, Color |
-
-## Interaction Model
-
-```mermaid
-flowchart LR
-    Sensor["Sensors\nMic / Gravity / Gyro"] --> Engine["LightEngine"]
-    Live["Live Control"] --> Engine
-    Editor["Keyframe Editor"] --> Engine
-    Effects["Effect Catalog"] --> Engine
-    Engine --> Preview["Phone Preview\nraw effect brightness"]
-    Engine --> Output["BLE Output\nmaster brightness limited"]
-    Output --> Board["2 x 4 WS2812 Matrix"]
-```
-
-## Hardware Output Pipeline
-
-```mermaid
-flowchart TD
-    A["Render logical LedMatrix"] --> B["Keep raw frame for phone preview"]
-    A --> C["Apply master brightness limit"]
-    C --> D["Premultiply RGB brightness"]
-    D --> E["Map logical LEDs to physical 2 x 4 order"]
-    E --> F["Pack WS2812 BLE frame"]
-    F --> G["Send to board"]
-```
+<table>
+  <tr>
+    <td><strong>Live by touch</strong></td>
+    <td>Pick hue, RGB values, brightness, and speed with direct controls built for quick visual tuning.</td>
+  </tr>
+  <tr>
+    <td><strong>Effects with feel</strong></td>
+    <td>Breath, wave, runner, sparkle, music pulse, gravity fluid, gyro follow, and shake burst are rendered in-app.</td>
+  </tr>
+  <tr>
+    <td><strong>Editor included</strong></td>
+    <td>Create keyframe animations, save presets, delete history, and import or export configurations.</td>
+  </tr>
+  <tr>
+    <td><strong>Hardware-aware</strong></td>
+    <td>Preview keeps raw effect brightness, while BLE output applies the global brightness limit for bright physical LEDs.</td>
+  </tr>
+</table>
 
 ## Screens
 
-| Screen | Purpose |
+<table>
+  <tr>
+    <td width="33%" align="center">
+      <img src="./docs/assets/readme/home-gravity.jpg" width="230" alt="Home gravity fluid mode" />
+      <br />
+      <strong>Gravity Fluid</strong>
+    </td>
+    <td width="33%" align="center">
+      <img src="./docs/assets/readme/live-control.jpg" width="230" alt="Live color control" />
+      <br />
+      <strong>Live Control</strong>
+    </td>
+    <td width="33%" align="center">
+      <img src="./docs/assets/readme/editor-preview.jpg" width="230" alt="Keyframe editor preview" />
+      <br />
+      <strong>Keyframe Editor</strong>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center">
+      <img src="./docs/assets/readme/sensor-modes.jpg" width="230" alt="Sensor mode cards" />
+      <br />
+      <strong>Sensor Modes</strong>
+    </td>
+    <td width="33%" align="center">
+      <img src="./docs/assets/readme/effects.jpg" width="230" alt="Effect catalog cards" />
+      <br />
+      <strong>Effect Catalog</strong>
+    </td>
+    <td width="33%" align="center">
+      <img src="./docs/assets/readme/color-picker.jpg" width="230" alt="Color picker dialog" />
+      <br />
+      <strong>Color Picker</strong>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center"></td>
+    <td width="33%" align="center">
+      <img src="./docs/assets/readme/editor-presets.jpg" width="230" alt="Editor preset list" />
+      <br />
+      <strong>Presets</strong>
+    </td>
+    <td width="33%" align="center"></td>
+  </tr>
+</table>
+
+## Feature Map
+
+| Surface | What it does |
 | --- | --- |
-| Home | 效果选择、传感器模式、设备状态和矩阵预览 |
-| Live | 即时调色、调亮度、调速度 |
-| Editor | 关键帧动画制作、预设管理、配置导入导出 |
-| Device | BLE 设备扫描、连接和状态查看 |
-| Settings | 全局亮度限制、动画速度等应用级参数 |
+| Home | Device status, sensor modes, effect catalog, and contextual controls |
+| Live | Realtime matrix preview, color wheel, RGB sliders, brightness, and speed |
+| Editor | Keyframes, playback, duplicate/delete/move controls, presets, import, and export |
+| Device | BLE scan, connection state, and device selection |
+| Settings | Global brightness limit and app-level animation speed |
+
+## Effects
+
+| Effect | Behavior | Controls |
+| --- | --- | --- |
+| Solid | Stable single-color output | Color, brightness |
+| Breath | Nonlinear 255 -> 0 -> 255 brightness curve | Color, speed, brightness |
+| Run | Continuous stream across the matrix | Color, speed |
+| Wave | Soft bands expanding across LEDs | Color, speed |
+| Music Pulse | Microphone RMS level drives brightness after threshold | Threshold, color |
+| Gravity Fluid | Tilt controls a continuous liquid surface | Fluid amount, density |
+| Gyro Follow | Gyroscope movement changes animation direction | Motion, color |
+| Shake Burst | Shake intensity triggers bursts and flashes | Motion, color |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI["Compose UI\nHome / Live / Editor"] --> Repo["Repositories\nStateFlow stores"]
+    Sensors["Phone sensors\nMic / Gravity / Gyro"] --> Repo
+    Repo --> Engine["LightEngine\n2 x 4 frame renderer"]
+    Engine --> Preview["Phone preview\nraw effect brightness"]
+    Engine --> Output["BLE output\nbrightness limited"]
+    Output --> Protocol["WS2812Protocol\nAA 55 CMD PAYLOAD CS"]
+    Protocol --> Board["2 x 4 WS2812 board"]
+```
+
+```mermaid
+flowchart TD
+    A["Render logical LedMatrix"] --> B["Show raw frame in app preview"]
+    A --> C["Apply master brightness limit"]
+    C --> D["Premultiply RGB brightness"]
+    D --> E["Map logical LEDs to physical 2 x 4 order"]
+    E --> F["Pack BLE frame"]
+    F --> G["Send to hardware"]
+```
+
+## Hardware Target
+
+LumaFlow currently targets an 8 LED WS2812 matrix arranged as 2 rows by 4 columns. The app sends binary BLE frames using the protocol documented in [BLUETOOTH_WS2812_PROTOCOL.md](./BLUETOOTH_WS2812_PROTOCOL.md).
+
+```text
+AA 55 CMD PAYLOAD CS
+```
+
+For animated effects, the app sends a complete 8 LED frame so each pixel can carry its own RGB and brightness state.
+
+## Quick Start
+
+Clone and build with the Gradle wrapper:
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+The debug APK is generated at:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+Run unit tests:
+
+```powershell
+.\gradlew.bat test
+```
+
+If Windows keeps serving an old APK, remove the previous output first:
+
+```powershell
+Remove-Item -LiteralPath "app\build\outputs\apk\debug\app-debug.apk" -Force
+.\gradlew.bat assembleDebug
+```
 
 ## Tech Stack
 
@@ -93,7 +199,7 @@ flowchart TD
 | Navigation | Navigation Compose |
 | Sensors | Android Sensor APIs, AudioRecord |
 | Transport | Bluetooth LE GATT |
-| Hardware Protocol | WS2812 frame protocol over BLE serial |
+| Hardware protocol | WS2812 frame protocol over BLE serial |
 
 Project config:
 
@@ -108,9 +214,8 @@ versionName   = 1.0
 
 ```text
 app/src/main/java/com/example/rgbcontrller/
-  MainActivity.kt
   data/
-    bluetooth/       BLE service and WS2812 protocol packing
+    bluetooth/       BLE service and WS2812 frame packing
     mock/            repositories, sensors, animation clocks, local stores
   domain/
     engine/          effect renderer
@@ -123,60 +228,7 @@ app/src/main/java/com/example/rgbcontrller/
   ui/theme/          color, type, Material theme
 ```
 
-Important files:
-
-```text
-app/src/main/java/com/example/rgbcontrller/domain/engine/LightEngine.kt
-app/src/main/java/com/example/rgbcontrller/data/mock/MockRepositories.kt
-app/src/main/java/com/example/rgbcontrller/data/bluetooth/Ws2812Protocol.kt
-app/src/main/java/com/example/rgbcontrller/data/bluetooth/AndroidBluetoothService.kt
-app/src/main/java/com/example/rgbcontrller/presentation/screens/dashboard/DashboardScreen.kt
-app/src/main/java/com/example/rgbcontrller/presentation/screens/live/LiveControlScreen.kt
-app/src/main/java/com/example/rgbcontrller/presentation/screens/editor/EditorScreen.kt
-```
-
-## Build
-
-Run tests:
-
-```powershell
-.\gradlew.bat test
-```
-
-Build debug APK:
-
-```powershell
-.\gradlew.bat assembleDebug
-```
-
-APK output:
-
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-If Windows keeps showing an old APK, remove the previous output first:
-
-```powershell
-Remove-Item -LiteralPath "app\build\outputs\apk\debug\app-debug.apk" -Force
-.\gradlew.bat assembleDebug
-```
-
-## BLE Protocol
-
-The hardware protocol is documented in [BLUETOOTH_WS2812_PROTOCOL.md](BLUETOOTH_WS2812_PROTOCOL.md).
-
-Frame shape:
-
-```text
-AA 55 CMD PAYLOAD CS
-```
-
-The app sends binary bytes, not ASCII hex strings. For animated effects, it uses the 8 LED frame command so every LED can carry its own RGB and brightness state.
-
 ## Test Coverage
-
-Current unit tests cover:
 
 - WS2812 frame packing and checksum.
 - 2 x 4 physical LED mapping.
