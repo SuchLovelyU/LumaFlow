@@ -46,20 +46,36 @@ object Ws2812Protocol {
     fun setFrame8(matrix: LedMatrix): ByteArray {
         val pixelsById = matrix.pixels.associateBy { it.id }
         val payload = IntArray(LedCount * 4)
-        repeat(LedCount) { id ->
-            val pixel = pixelsById[id]
-            val offset = id * 4
-            payload[offset] = pixel?.color?.redByte() ?: 0
-            payload[offset + 1] = pixel?.color?.greenByte() ?: 0
-            payload[offset + 2] = pixel?.color?.blueByte() ?: 0
-            payload[offset + 3] = pixel?.brightness?.toByteValue() ?: 0
+        repeat(LedCount) { physicalId ->
+            val pixel = pixelsById[matrix.logicalIdForPhysicalLed(physicalId)]
+            val brightness = pixel?.brightness?.coerceIn(0f, 1f) ?: 0f
+            val offset = physicalId * 4
+            payload[offset] = pixel?.color?.redByte()?.scaledBy(brightness) ?: 0
+            payload[offset + 1] = pixel?.color?.greenByte()?.scaledBy(brightness) ?: 0
+            payload[offset + 2] = pixel?.color?.blueByte()?.scaledBy(brightness) ?: 0
+            payload[offset + 3] = if (pixel == null) 0 else 255
         }
         return buildFrame(CmdSetFrame8, payload)
+    }
+
+    private fun LedMatrix.logicalIdForPhysicalLed(physicalId: Int): Int {
+        if (rows <= 0 || columns <= 0 || physicalId >= ledCount) return physicalId
+        val row = physicalId / columns
+        val physicalColumn = physicalId % columns
+        val mirroredColumn = columns - 1 - physicalColumn
+        val logicalColumn = if (row % 2 == 0) {
+            mirroredColumn
+        } else {
+            columns - 1 - mirroredColumn
+        }
+        return row * columns + logicalColumn
     }
 
     private fun RgbColor.redByte(): Int = red.coerceIn(0, 255)
     private fun RgbColor.greenByte(): Int = green.coerceIn(0, 255)
     private fun RgbColor.blueByte(): Int = blue.coerceIn(0, 255)
+
+    private fun Int.scaledBy(brightness: Float): Int = (this * brightness.coerceIn(0f, 1f)).toInt().coerceIn(0, 255)
 
     private fun Float.toByteValue(): Int = (coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255)
 }

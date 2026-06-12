@@ -1,4 +1,4 @@
-# RGB Controller
+# LumaFlow
 
 Android app for controlling a small RGB LED matrix over Bluetooth Low Energy.
 
@@ -7,6 +7,7 @@ The current hardware target is a 2 x 4 RGB LED matrix. The app is still built ar
 ## Current State
 
 - Kotlin Android app using Jetpack Compose and Material 3.
+- App display name: `LumaFlow`.
 - Bottom navigation contains Home, Live, and Editor.
 - Home combines the former effects and sensor-mode surfaces into one control screen.
 - Device and Settings are secondary screens.
@@ -23,8 +24,13 @@ The current hardware target is a 2 x 4 RGB LED matrix. The app is still built ar
   - Shake Burst reacts to detected movement intensity.
 - Live Control with direct HSV color-wheel picking, RGB sliders, brightness, speed, and direction controls.
 - Editor with keyframe playback, add, duplicate, move, delete, duration, color, and brightness controls.
+- Device-level max brightness limit. Home effects, Live Control, Editor playback, and direct test commands are capped by this global limit.
 - BLE scanning, connection, frame sending, and all-LED color commands behind `BluetoothService`.
 - Light theme with subtle tinted background, white card surfaces, rounded corners, shadows, and restrained selected states.
+
+## Brand
+
+`LumaFlow` combines light and motion. The launcher icon uses a soft blue-violet adaptive background and a minimal flowing light mark, keeping the brand abstract instead of drawing the hardware literally.
 
 ## Permissions And Sensors
 
@@ -121,7 +127,7 @@ The local light engine lives in:
 app/src/main/java/com/example/rgbcontrller/domain/engine/LightEngine.kt
 ```
 
-It renders `LedMatrix` frames for the 2 x 4 target and supports static, dynamic, music, gravity, shake, direction, and ambient-style effects.
+It renders `LedMatrix` frames for the 2 x 4 target and supports static, dynamic, music, gravity, shake, direction, and ambient-style effects. Rendered frames are capped by the device-level max brightness limit before preview and BLE output.
 
 The active page owns the active render mode. Switching between Home, Live, and Editor applies only that page's selected/default effect so effects do not stack across tabs.
 

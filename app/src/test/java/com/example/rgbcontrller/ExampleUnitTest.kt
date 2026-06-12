@@ -9,6 +9,7 @@ import com.example.rgbcontrller.data.mock.MockCatalog
 import com.example.rgbcontrller.data.mock.MockDeviceRepository
 import com.example.rgbcontrller.data.mock.MockSettingsRepository
 import com.example.rgbcontrller.domain.engine.LightEngine
+import com.example.rgbcontrller.domain.model.AppSettings
 import com.example.rgbcontrller.domain.model.ConnectionStatus
 import com.example.rgbcontrller.domain.model.Keyframe
 import com.example.rgbcontrller.domain.model.LedMatrix
@@ -83,9 +84,33 @@ class ExampleUnitTest {
 
         assertEquals(36, frame.size)
         assertEquals(
-            "AA 55 10 FF 00 00 FF 00 FF 00 FF 00 00 FF FF FF FF 00 FF 00 FF FF FF 80 00 FF FF FF FF FF FF 00 00 00 00 90",
+            "AA 55 10 FF FF 00 FF 00 00 FF FF 00 FF 00 FF FF 00 00 FF 00 FF FF FF 80 00 FF FF FF FF FF FF 00 00 00 FF 6F",
             frame.toHex(),
         )
+    }
+
+    @Test
+    fun setFrame8_mapsSerpentineHardwareAndPremultipliesBrightness() {
+        val matrix = LedMatrix(
+            rows = 2,
+            columns = 4,
+            pixels = List(8) { index ->
+                LedPixel(
+                    id = index,
+                    color = RgbColor((index + 1) * 10, 0, 0),
+                    brightness = if (index == 4) 0.25f else 1f,
+                )
+            },
+        )
+
+        val payload = Ws2812Protocol.setFrame8(matrix).drop(3).dropLast(1)
+
+        assertEquals(40, payload[0].toInt() and 0xFF)
+        assertEquals(12, payload[16].toInt() and 0xFF)
+        assertEquals(60, payload[20].toInt() and 0xFF)
+        assertEquals(70, payload[24].toInt() and 0xFF)
+        assertEquals(80, payload[28].toInt() and 0xFF)
+        assertEquals(255, payload[31].toInt() and 0xFF)
     }
 
     @Test
@@ -154,6 +179,29 @@ class ExampleUnitTest {
     }
 
     @Test
+    fun runAndBreathEffectsHaveClearBrightnessIntent() {
+        val engine = LightEngine()
+        val run = engine.render(
+            rows = 2,
+            columns = 4,
+            tick = 0,
+            effect = MockCatalog.effects.first { it.id == "run" },
+            liveControl = LiveControl(brightness = 1f),
+        )
+        val breath = engine.render(
+            rows = 2,
+            columns = 4,
+            tick = 0,
+            effect = MockCatalog.effects.first { it.id == "breath" },
+            liveControl = LiveControl(brightness = 1f),
+        )
+
+        assertTrue(run.pixels.any { it.brightness == 0f })
+        assertTrue(run.pixels.maxOf { it.brightness } - run.pixels.minOf { it.brightness } > 0.8f)
+        assertTrue(breath.pixels.map { (it.brightness * 100).toInt() }.toSet().size <= 2)
+    }
+
+    @Test
     fun keyframeCodec_roundTripsAndSkipsInvalidFrames() {
         val keyframes = listOf(
             Keyframe("kf-custom", RgbColor(12, 34, 56), 0.67f, 789),
@@ -175,11 +223,25 @@ class ExampleUnitTest {
         repository.updateDynamicTheme(false)
         repository.updateAnimationSpeed(2f)
         repository.updateDefaultBrightness(-1f)
+        repository.updateMasterBrightnessLimit(2f)
 
         assertTrue(repository.settings.value.darkMode)
         assertFalse(repository.settings.value.dynamicTheme)
         assertEquals(1f, repository.settings.value.animationSpeed, 0f)
         assertEquals(0f, repository.settings.value.defaultBrightness, 0f)
+        assertEquals(1f, repository.settings.value.masterBrightnessLimit, 0f)
+    }
+
+    @Test
+    fun deviceRepository_capsDirectSendAllByMasterBrightnessLimit() = runBlocking {
+        val bluetoothService = FakeBluetoothService()
+        val settings = MutableStateFlow(AppSettings(masterBrightnessLimit = 0.35f))
+        val repository = MockDeviceRepository(bluetoothService = bluetoothService, settingsState = settings)
+
+        repository.sendAll(RgbColor.White, 0.8f)
+        delay(20)
+
+        assertEquals(0.35f, bluetoothService.lastSendAllBrightness ?: -1f, 0f)
     }
 
     @Test
@@ -281,6 +343,7 @@ private class FakeLightRepository(
             matrix = LedMatrix(rows = 2, columns = 4, pixels = emptyList()),
             activeEffect = null,
             liveControl = LiveControl(),
+            brightnessLimit = 1f,
             playback = PlaybackState(isPlaying = true, positionMs = 0),
             keyframes = initialKeyframes,
         ),
@@ -297,6 +360,12 @@ private class FakeLightRepository(
     override fun updateKeyframes(keyframes: List<Keyframe>) {
         lastKeyframes = keyframes
     }
+
+    override fun saveKeyframePreset(name: String, keyframes: List<Keyframe>) {
+        lastKeyframes = keyframes
+    }
+
+    override fun deleteKeyframePreset(id: String) = Unit
 
     override fun togglePlayback() = Unit
 }
@@ -323,6 +392,8 @@ private class FakeBluetoothService : BluetoothService {
     private val events = MutableSharedFlow<BluetoothConnectionEvent>(replay = 8)
     override val connectionEvents: Flow<BluetoothConnectionEvent> = events
     override val discoveredDevices: StateFlow<List<BluetoothDeviceCandidate>> = MutableStateFlow(emptyList())
+    var lastSendAllBrightness: Float? = null
+        private set
 
     suspend fun emit(event: BluetoothConnectionEvent) {
         events.emit(event)
@@ -332,5 +403,7 @@ private class FakeBluetoothService : BluetoothService {
     override suspend fun connect(deviceAddress: String) = Unit
     override suspend fun disconnect() = Unit
     override suspend fun sendFrame(matrix: LedMatrix) = Unit
-    override suspend fun sendAll(color: RgbColor, brightness: Float) = Unit
+    override suspend fun sendAll(color: RgbColor, brightness: Float) {
+        lastSendAllBrightness = brightness
+    }
 }

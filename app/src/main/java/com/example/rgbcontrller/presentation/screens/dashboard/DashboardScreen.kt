@@ -115,7 +115,7 @@ fun DashboardScreen(
             ) {
                 item(span = { GridItemSpan(2) }) {
                     Column {
-                        PageTitle(title = "LightDeck", subtitle = "Home, effects, and sensors in one control surface")
+                        PageTitle(title = "LumaFlow", subtitle = "Home, effects, and sensors in one control surface")
                         Spacer(Modifier.height(16.dp))
                         DeviceStatusHeader(state.device, onClick = onOpenDevice)
                         Spacer(Modifier.height(16.dp))
@@ -125,13 +125,16 @@ fun DashboardScreen(
 
                 if (state.activeEffect?.id == "music" || viewModel.selectedEffect.id == "music") {
                     item(span = { GridItemSpan(2) }) {
-                        ExpressiveSlider(
-                            label = "Music threshold",
-                            value = state.liveControl.musicThreshold,
-                            onValueChange = { value ->
-                                viewModel.updateEffectControl { it.copy(musicThreshold = value.coerceIn(0f, 0.95f)) }
-                            },
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            EffectSpeedSlider(state.liveControl.speed, viewModel::updateEffectControl)
+                            ExpressiveSlider(
+                                label = "Music threshold",
+                                value = state.liveControl.musicThreshold,
+                                onValueChange = { value ->
+                                    viewModel.updateEffectControl { it.copy(musicThreshold = value.coerceIn(0f, 0.95f)) }
+                                },
+                            )
+                        }
                     }
                 }
 
@@ -153,6 +156,12 @@ fun DashboardScreen(
                                 },
                             )
                         }
+                    }
+                }
+
+                if (viewModel.selectedEffect.usesSpeedControl() && viewModel.selectedEffect.id != "music") {
+                    item(span = { GridItemSpan(2) }) {
+                        EffectSpeedSlider(state.liveControl.speed, viewModel::updateEffectControl)
                     }
                 }
 
@@ -181,4 +190,20 @@ fun DashboardScreen(
             }
         }
     }
+}
+
+@Composable
+private fun EffectSpeedSlider(
+    speed: Float,
+    onUpdate: ((LiveControl) -> LiveControl) -> Unit,
+) {
+    ExpressiveSlider(
+        label = "Effect speed",
+        value = speed,
+        onValueChange = { value -> onUpdate { it.copy(speed = value.coerceIn(0f, 1f)) } },
+    )
+}
+
+private fun LightEffect.usesSpeedControl(): Boolean {
+    return id in setOf("breath", "blink", "run", "rainbow", "wave", "meteor", "flame", "aurora", "neon", "music", "direction", "ambient")
 }

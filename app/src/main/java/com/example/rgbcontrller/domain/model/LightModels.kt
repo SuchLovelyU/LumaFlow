@@ -62,12 +62,6 @@ enum class EffectCategory(val label: String) {
     Advanced("Sensor"),
 }
 
-enum class DirectionMode(val label: String) {
-    Horizontal("Horizontal"),
-    Vertical("Vertical"),
-    Circular("Circular"),
-}
-
 data class LightEffect(
     val id: String,
     val name: String,
@@ -86,7 +80,6 @@ data class LiveControl(
     val musicThreshold: Float = 0.55f,
     val fluidLevel: Float = 0.62f,
     val fluidDensity: Float = 0.72f,
-    val direction: DirectionMode = DirectionMode.Horizontal,
     val selectedLedId: Int? = null,
 )
 
@@ -125,6 +118,12 @@ data class Keyframe(
     val durationMs: Int,
 )
 
+data class KeyframePreset(
+    val id: String,
+    val name: String,
+    val keyframes: List<Keyframe>,
+)
+
 data class PlaybackState(
     val isPlaying: Boolean,
     val positionMs: Long,
@@ -137,6 +136,7 @@ data class AppSettings(
     val developerMode: Boolean = false,
     val animationSpeed: Float = 0.72f,
     val defaultBrightness: Float = 0.78f,
+    val masterBrightnessLimit: Float = 1f,
 )
 
 data class LightSessionState(
@@ -144,6 +144,8 @@ data class LightSessionState(
     val matrix: LedMatrix,
     val activeEffect: LightEffect?,
     val liveControl: LiveControl,
+    val brightnessLimit: Float,
     val playback: PlaybackState,
     val keyframes: List<Keyframe>,
+    val keyframePresets: List<KeyframePreset> = emptyList(),
 )

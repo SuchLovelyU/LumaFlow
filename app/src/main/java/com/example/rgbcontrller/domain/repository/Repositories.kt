@@ -18,6 +18,8 @@ interface LightRepository {
     fun updateLiveControl(control: LiveControl)
     fun updateEffectControl(control: LiveControl)
     fun updateKeyframes(keyframes: List<Keyframe>)
+    fun saveKeyframePreset(name: String, keyframes: List<Keyframe>)
+    fun deleteKeyframePreset(id: String)
     fun togglePlayback()
 }
 
@@ -48,4 +50,5 @@ interface SettingsRepository {
     fun updateDeveloperMode(value: Boolean)
     fun updateAnimationSpeed(value: Float)
     fun updateDefaultBrightness(value: Float)
+    fun updateMasterBrightnessLimit(value: Float)
 }

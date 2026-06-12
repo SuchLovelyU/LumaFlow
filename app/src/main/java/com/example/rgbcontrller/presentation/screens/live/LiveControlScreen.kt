@@ -17,13 +17,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rgbcontrller.data.mock.AppContainer
-import com.example.rgbcontrller.domain.model.DirectionMode
 import com.example.rgbcontrller.domain.model.LiveControl
 import com.example.rgbcontrller.domain.model.RgbColor
 import com.example.rgbcontrller.domain.repository.LightRepository
 import com.example.rgbcontrller.presentation.ui.components.AuroraBackground
 import com.example.rgbcontrller.presentation.ui.components.ColorWheelControl
-import com.example.rgbcontrller.presentation.ui.components.DirectionSegmentedControl
 import com.example.rgbcontrller.presentation.ui.components.ExpressiveSlider
 import com.example.rgbcontrller.presentation.ui.components.LedMatrixPreview
 import com.example.rgbcontrller.presentation.ui.components.PageTitle
@@ -39,10 +37,6 @@ class LiveControlViewModel(
 
     fun activateLiveDefault() {
         lightRepository.updateLiveControl(session.value.liveControl)
-    }
-
-    fun updateDirection(direction: DirectionMode) {
-        update { it.copy(direction = direction) }
     }
 
     fun updateHsv(hue: Float = session.value.liveControl.hue, saturation: Float = session.value.liveControl.saturation, value: Float = session.value.liveControl.value) {
@@ -78,7 +72,7 @@ fun LiveControlScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 item {
-                    PageTitle(title = "Live Control", subtitle = "Tune color, brightness, speed and direction")
+                    PageTitle(title = "Live Control", subtitle = "Tune color, brightness, and speed")
                 }
                 item {
                     LedMatrixPreview(state.matrix, title = "Live preview")
@@ -102,9 +96,12 @@ fun LiveControlScreen(
                         ExpressiveSlider("Red", control.color.red / 255f, { value -> viewModel.update { it.copy(color = it.color.copy(red = (value * 255).toInt().coerceIn(0, 255))) } })
                         ExpressiveSlider("Green", control.color.green / 255f, { value -> viewModel.update { it.copy(color = it.color.copy(green = (value * 255).toInt().coerceIn(0, 255))) } })
                         ExpressiveSlider("Blue", control.color.blue / 255f, { value -> viewModel.update { it.copy(color = it.color.copy(blue = (value * 255).toInt().coerceIn(0, 255))) } })
-                        ExpressiveSlider("Brightness", control.brightness, { value -> viewModel.update { it.copy(brightness = value.coerceIn(0f, 1f)) } })
+                        ExpressiveSlider(
+                            label = "Brightness",
+                            value = control.brightness,
+                            onValueChange = { value -> viewModel.update { it.copy(brightness = value.coerceIn(0f, 1f)) } },
+                        )
                         ExpressiveSlider("Speed", control.speed, { value -> viewModel.update { it.copy(speed = value.coerceIn(0f, 1f)) } })
-                        DirectionSegmentedControl(selected = control.direction, onSelect = viewModel::updateDirection)
                     }
                 }
             }

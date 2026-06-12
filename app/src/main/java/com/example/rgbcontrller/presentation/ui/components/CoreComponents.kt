@@ -18,7 +18,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -38,7 +37,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -62,7 +60,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.rgbcontrller.domain.model.ConnectionStatus
 import com.example.rgbcontrller.domain.model.DeviceInfo
-import com.example.rgbcontrller.domain.model.DirectionMode
 import com.example.rgbcontrller.domain.model.Keyframe
 import com.example.rgbcontrller.domain.model.LedMatrix
 import com.example.rgbcontrller.domain.model.LightEffect
@@ -324,30 +321,20 @@ fun ExpressiveSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
 ) {
+    val safeRange = if (valueRange.endInclusive > valueRange.start) valueRange else valueRange.start..(valueRange.start + 0.001f)
+    val displayValue = value.coerceIn(valueRange.start, valueRange.endInclusive)
     Column(modifier) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text("${(value * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text("${(displayValue * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
-        Slider(value = value.coerceIn(0f, 1f), onValueChange = { onValueChange(it.coerceIn(0f, 1f)) })
-    }
-}
-
-@Composable
-fun DirectionSegmentedControl(
-    selected: DirectionMode,
-    onSelect: (DirectionMode) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        DirectionMode.entries.forEach { mode ->
-            FilterChip(
-                selected = selected == mode,
-                onClick = { onSelect(mode) },
-                label = { Text(mode.label) },
-            )
-        }
+        Slider(
+            value = value.coerceIn(safeRange.start, safeRange.endInclusive),
+            onValueChange = { onValueChange(it.coerceIn(safeRange.start, safeRange.endInclusive)) },
+            valueRange = safeRange,
+        )
     }
 }
 

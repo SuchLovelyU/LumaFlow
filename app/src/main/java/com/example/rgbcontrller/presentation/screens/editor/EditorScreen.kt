@@ -1,6 +1,12 @@
 package com.example.rgbcontrller.presentation.screens.editor
 
+import android.content.Context
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,20 +14,33 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,21 +49,27 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rgbcontrller.data.mock.AppContainer
+import com.example.rgbcontrller.data.mock.KeyframeCodec
 import com.example.rgbcontrller.domain.model.Keyframe
+import com.example.rgbcontrller.domain.model.KeyframePreset
 import com.example.rgbcontrller.domain.model.RgbColor
 import com.example.rgbcontrller.domain.repository.LightRepository
 import com.example.rgbcontrller.presentation.ui.components.AuroraBackground
+import com.example.rgbcontrller.presentation.ui.components.ColorWheelControl
 import com.example.rgbcontrller.presentation.ui.components.ExpressiveSlider
 import com.example.rgbcontrller.presentation.ui.components.LedMatrixPreview
 import com.example.rgbcontrller.presentation.ui.components.PageTitle
 import com.example.rgbcontrller.presentation.ui.components.TimelineEditor
+import java.io.IOException
 
 class EditorViewModel(
     private val lightRepository: LightRepository = AppContainer.lightRepository,
@@ -64,7 +89,7 @@ class EditorViewModel(
         val next = Keyframe(
             id = nextKeyframeId(),
             color = palette[keyframes.size % palette.size],
-            brightness = 0.65f + (keyframes.size % 3) * 0.12f,
+            brightness = (0.65f + (keyframes.size % 3) * 0.12f).coerceIn(0f, 1f),
             durationMs = 420 + keyframes.size * 40,
         )
         keyframes = keyframes + next
@@ -108,6 +133,33 @@ class EditorViewModel(
         lightRepository.togglePlayback()
     }
 
+    fun saveConfig() {
+        lightRepository.saveKeyframePreset(defaultPresetName(), keyframes)
+    }
+
+    fun loadPreset(preset: KeyframePreset) {
+        keyframes = preset.keyframes
+        selectedId = keyframes.firstOrNull()?.id
+        lightRepository.updateKeyframes(keyframes)
+    }
+
+    fun deletePreset(id: String) {
+        lightRepository.deleteKeyframePreset(id)
+    }
+
+    fun exportConfig(): String {
+        return KeyframeCodec.encode(keyframes)
+    }
+
+    fun importConfig(encoded: String): Boolean {
+        val imported = KeyframeCodec.decode(encoded)
+        if (imported.isEmpty()) return false
+        keyframes = imported
+        selectedId = imported.firstOrNull()?.id
+        lightRepository.updateKeyframes(keyframes)
+        return true
+    }
+
     fun activateEditorDefault() {
         lightRepository.updateKeyframes(keyframes)
     }
@@ -131,6 +183,10 @@ class EditorViewModel(
 
     fun updateSelectedBlue(value: Float) {
         updateSelectedColor { it.copy(blue = (value * 255).toInt().coerceIn(0, 255)) }
+    }
+
+    fun updateSelectedColor(color: RgbColor) {
+        updateSelected { it.copy(color = color) }
     }
 
     private fun updateSelectedColor(transform: (RgbColor) -> RgbColor) {
@@ -169,6 +225,15 @@ class EditorViewModel(
         }
         return "kf-$nextNumber"
     }
+
+    private fun defaultPresetName(): String {
+        val existing = session.value.keyframePresets.map { it.name }.toSet()
+        var number = existing.size + 1
+        while ("Preset $number" in existing) {
+            number += 1
+        }
+        return "Preset $number"
+    }
 }
 
 @Composable
@@ -177,6 +242,20 @@ fun EditorScreen(
     viewModel: EditorViewModel = viewModel(),
 ) {
     val state by viewModel.session.collectAsState()
+    val context = LocalContext.current
+    var showColorPicker by remember { mutableStateOf(false) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) {
+            val saved = context.writeConfig(uri, viewModel.exportConfig())
+            context.showEditorToast(if (saved) "Configuration exported" else "Export failed")
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val imported = context.readConfig(uri)?.let(viewModel::importConfig) == true
+            context.showEditorToast(if (imported) "Configuration imported" else "Import failed")
+        }
+    }
     LaunchedEffect(Unit) {
         viewModel.activateEditorDefault()
     }
@@ -233,6 +312,20 @@ fun EditorScreen(
                                 Icon(Icons.Filled.Delete, contentDescription = "Delete keyframe")
                             }
                         }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            EditorToolButton(onClick = {
+                                viewModel.saveConfig()
+                                context.showEditorToast("Preset saved")
+                            }) {
+                                Icon(Icons.Filled.Save, contentDescription = "Save configuration")
+                            }
+                            EditorToolButton(onClick = { exportLauncher.launch("lumaflow-keyframes.txt") }) {
+                                Icon(Icons.Filled.FileDownload, contentDescription = "Export configuration")
+                            }
+                            EditorToolButton(onClick = { importLauncher.launch(arrayOf("text/*", "application/octet-stream")) }) {
+                                Icon(Icons.Filled.FileUpload, contentDescription = "Import configuration")
+                            }
+                        }
                     }
                 }
                 item {
@@ -240,6 +333,13 @@ fun EditorScreen(
                         keyframes = viewModel.keyframes,
                         selectedId = viewModel.selectedId,
                         onSelect = viewModel::select,
+                    )
+                }
+                item {
+                    PresetPicker(
+                        presets = state.keyframePresets,
+                        onSelect = viewModel::loadPreset,
+                        onDelete = viewModel::deletePreset,
                     )
                 }
                 item {
@@ -251,10 +351,21 @@ fun EditorScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
-                            ExpressiveSlider("Selected brightness", selected.brightness, viewModel::updateSelectedBrightness)
+                            ExpressiveSlider(
+                                label = "Selected brightness",
+                                value = selected.brightness,
+                                onValueChange = viewModel::updateSelectedBrightness,
+                            )
                             ExpressiveSlider("Red", selected.color.red / 255f, viewModel::updateSelectedRed)
                             ExpressiveSlider("Green", selected.color.green / 255f, viewModel::updateSelectedGreen)
                             ExpressiveSlider("Blue", selected.color.blue / 255f, viewModel::updateSelectedBlue)
+                            OutlinedButton(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { showColorPicker = true },
+                            ) {
+                                Icon(Icons.Filled.ColorLens, contentDescription = null)
+                                Text("Pick color")
+                            }
                             ExpressiveSlider(
                                 "Duration",
                                 ((selected.durationMs - 200) / 1800f).coerceIn(0f, 1f),
@@ -266,6 +377,121 @@ fun EditorScreen(
             }
         }
     }
+    val selected = viewModel.keyframes.firstOrNull { it.id == viewModel.selectedId }
+    if (showColorPicker && selected != null) {
+        KeyframeColorPickerDialog(
+            color = selected.color,
+            onDismiss = { showColorPicker = false },
+            onColorChange = viewModel::updateSelectedColor,
+        )
+    }
+}
+
+@Composable
+private fun PresetPicker(
+    presets: List<KeyframePreset>,
+    onSelect: (KeyframePreset) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Presets", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text("${presets.size} saved", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (presets.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().height(72.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 1.dp,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("No saved presets", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(presets, key = { it.id }) { preset ->
+                    Card(
+                        onClick = { onSelect(preset) },
+                        modifier = Modifier.size(width = 156.dp, height = 104.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    ) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text(preset.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                                IconButton(
+                                    modifier = Modifier.size(32.dp),
+                                    onClick = { onDelete(preset.id) },
+                                ) {
+                                    Icon(Icons.Filled.Delete, contentDescription = "Delete preset")
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                preset.keyframes.take(5).forEach { keyframe ->
+                                    Box(
+                                        Modifier
+                                            .weight(1f)
+                                            .height(22.dp)
+                                            .background(keyframe.color.toComposeColor(), CircleShape),
+                                    )
+                                }
+                            }
+                            Text("${preset.keyframes.size} frames", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KeyframeColorPickerDialog(
+    color: RgbColor,
+    onDismiss: () -> Unit,
+    onColorChange: (RgbColor) -> Unit,
+) {
+    val hsv = remember(color) { color.toHsv() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Done")
+            }
+        },
+        title = { Text("Pick color") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .background(color.toComposeColor(), CircleShape),
+                )
+                ColorWheelControl(
+                    colors = listOf(RgbColor.Coral, RgbColor.Amber, RgbColor.Green, RgbColor.Cyan, RgbColor.Violet, RgbColor.Pink, RgbColor.Coral),
+                    hue = hsv.hue,
+                    saturation = hsv.saturation,
+                    onColorSelected = { hue, saturation ->
+                        onColorChange(hsvToRgb(hue, saturation, hsv.value))
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp),
+                )
+                ExpressiveSlider("Red", color.red / 255f, { value ->
+                    onColorChange(color.copy(red = (value * 255).toInt().coerceIn(0, 255)))
+                })
+                ExpressiveSlider("Green", color.green / 255f, { value ->
+                    onColorChange(color.copy(green = (value * 255).toInt().coerceIn(0, 255)))
+                })
+                ExpressiveSlider("Blue", color.blue / 255f, { value ->
+                    onColorChange(color.copy(blue = (value * 255).toInt().coerceIn(0, 255)))
+                })
+            }
+        },
+    )
 }
 
 @Composable
@@ -297,4 +523,75 @@ private fun EditorToolButton(
             }
         },
     )
+}
+
+private data class HsvColor(
+    val hue: Float,
+    val saturation: Float,
+    val value: Float,
+)
+
+private fun RgbColor.toHsv(): HsvColor {
+    val red = red / 255f
+    val green = green / 255f
+    val blue = blue / 255f
+    val max = maxOf(red, green, blue)
+    val min = minOf(red, green, blue)
+    val delta = max - min
+    val hue = when {
+        delta == 0f -> 0f
+        max == red -> (60f * ((green - blue) / delta)).mod(360f)
+        max == green -> 60f * ((blue - red) / delta + 2f)
+        else -> 60f * ((red - green) / delta + 4f)
+    }
+    val saturation = if (max == 0f) 0f else delta / max
+    return HsvColor(hue, saturation, max)
+}
+
+private fun hsvToRgb(hue: Float, saturation: Float, value: Float): RgbColor {
+    val normalized = ((hue % 360f) + 360f) % 360f
+    val c = value.coerceIn(0f, 1f) * saturation.coerceIn(0f, 1f)
+    val x = c * (1f - kotlin.math.abs((normalized / 60f) % 2f - 1f))
+    val m = value.coerceIn(0f, 1f) - c
+    val (r, g, b) = when {
+        normalized < 60f -> Triple(c, x, 0f)
+        normalized < 120f -> Triple(x, c, 0f)
+        normalized < 180f -> Triple(0f, c, x)
+        normalized < 240f -> Triple(0f, x, c)
+        normalized < 300f -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    return RgbColor(
+        red = ((r + m) * 255).toInt().coerceIn(0, 255),
+        green = ((g + m) * 255).toInt().coerceIn(0, 255),
+        blue = ((b + m) * 255).toInt().coerceIn(0, 255),
+    )
+}
+
+private fun Context.writeConfig(uri: Uri, content: String): Boolean {
+    return try {
+        contentResolver.openOutputStream(uri)?.use { output ->
+            output.write(content.toByteArray(Charsets.UTF_8))
+        } != null
+    } catch (_: IOException) {
+        false
+    } catch (_: SecurityException) {
+        false
+    }
+}
+
+private fun Context.readConfig(uri: Uri): String? {
+    return try {
+        contentResolver.openInputStream(uri)?.use { input ->
+            input.readBytes().toString(Charsets.UTF_8)
+        }
+    } catch (_: IOException) {
+        null
+    } catch (_: SecurityException) {
+        null
+    }
+}
+
+private fun Context.showEditorToast(message: String) {
+    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 }

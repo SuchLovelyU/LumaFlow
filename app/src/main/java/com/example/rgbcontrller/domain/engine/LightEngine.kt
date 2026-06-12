@@ -10,7 +10,9 @@ import com.example.rgbcontrller.domain.model.SensorSnapshot
 import com.example.rgbcontrller.domain.model.Vector3
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.math.sin
 
@@ -36,7 +38,11 @@ class LightEngine {
             return renderMusicPulse(rows, columns, tick, effect, liveControl, sensorSnapshot)
         }
         val pixels = List(total) { index ->
-            val phase = ((tick / 34f) + index * 0.55f) % 360f
+            val phase = if (effect?.id == "breath") {
+                (tick / 34f) % 360f
+            } else {
+                ((tick / 34f) + index * 0.55f) % 360f
+            }
             val base = effect?.palette?.takeIf { it.isNotEmpty() } ?: listOf(liveControl.color)
             val color = colorFor(effect?.id, base, index, total, phase)
             val brightness = brightnessFor(effect?.id, index, total, phase) * liveControl.brightness
@@ -64,17 +70,23 @@ class LightEngine {
         val fill = liveControl.fluidLevel.coerceIn(0.05f, 0.95f)
         val density = liveControl.fluidDensity.coerceIn(0f, 1f)
         val surface = 1f - fill * 2f
-        val softness = 0.55f - density * 0.25f
+        val softness = 0.08f + (1f - density) * 0.08f
         val total = rows * columns
 
         val pixels = List(total) { index ->
             val row = index / columns
             val column = index % columns
-            val x = if (columns == 1) 0f else column / (columns - 1f) * 2f - 1f
-            val y = if (rows == 1) 0f else row / (rows - 1f) * 2f - 1f
-            val lowSideProjection = (x * downX + y * downY).coerceIn(-1.2f, 1.2f)
-            val fluid = smoothStep(surface - softness, surface + softness, lowSideProjection)
-            val brightness = (fluid * liveControl.brightness * (0.45f + density * 0.55f)).coerceIn(0f, 1f)
+            val fluid = fluidCoverageForCell(
+                row = row,
+                column = column,
+                rows = rows,
+                columns = columns,
+                downX = downX,
+                downY = downY,
+                surface = surface,
+                softness = softness,
+            )
+            val brightness = (fluid * liveControl.brightness * (0.4f + density * 0.6f)).coerceIn(0f, 1f)
             val color = mix(
                 mix(RgbColor.Cyan, RgbColor.Green, density),
                 RgbColor.Amber,
@@ -90,6 +102,36 @@ class LightEngine {
         }
 
         return LedMatrix(rows, columns, pixels)
+    }
+
+    private fun fluidCoverageForCell(
+        row: Int,
+        column: Int,
+        rows: Int,
+        columns: Int,
+        downX: Float,
+        downY: Float,
+        surface: Float,
+        softness: Float,
+    ): Float {
+        var coverage = 0f
+        val sampleCount = GravitySamplesPerAxis * GravitySamplesPerAxis
+        repeat(GravitySamplesPerAxis) { sampleY ->
+            repeat(GravitySamplesPerAxis) { sampleX ->
+                val x = cellSampleCoordinate(column, columns, sampleX)
+                val y = cellSampleCoordinate(row, rows, sampleY)
+                val projection = (x * downX + y * downY).coerceIn(-1.4f, 1.4f)
+                coverage += smoothStep(surface - softness, surface + softness, projection)
+            }
+        }
+        return (coverage / sampleCount).coerceIn(0f, 1f)
+    }
+
+    private fun cellSampleCoordinate(cell: Int, cellCount: Int, sample: Int): Float {
+        if (cellCount <= 1) return 0f
+        val cellSize = 2f / cellCount
+        val sampleCenter = (sample + 0.5f) / GravitySamplesPerAxis
+        return -1f + cell * cellSize + sampleCenter * cellSize
     }
 
     private fun renderMusicPulse(
@@ -184,6 +226,11 @@ class LightEngine {
             return if (sin(phase.toRadians()) > 0f) palette.first() else palette.last()
         }
 
+        if (effectId == "breath") {
+            val base = palette.first()
+            return mix(base, palette.getOrElse(1) { base }, 0.12f + 0.08f * abs(sin((phase * 0.5f).toRadians())).toFloat())
+        }
+
         val position = ((phase / 80f) + index / total.toFloat()).mod(1f)
         val scaled = position * palette.size
         val first = scaled.toInt().mod(palette.size)
@@ -199,8 +246,19 @@ class LightEngine {
     ): Float {
         return when (effectId) {
             "solid" -> 0.92f
+            "breath" -> breathingBrightness(phase)
             "blink" -> if (sin(phase.toRadians()) > 0.35f) 1f else 0.18f
-            "run", "meteor" -> {
+            "run" -> {
+                val headPosition = (phase / 45f).mod(total.toFloat())
+                val forwardDistance = (index - headPosition + total).mod(total.toFloat())
+                when {
+                    forwardDistance < 0.42f -> 1f
+                    forwardDistance < 1.25f -> 0.58f
+                    forwardDistance < 2.2f -> 0.2f
+                    else -> 0f
+                }
+            }
+            "meteor" -> {
                 val head = ((phase / 45f).toInt()).mod(total)
                 val distance = minOf(abs(index - head), total - abs(index - head))
                 (1f - distance * 0.22f).coerceIn(0.14f, 1f)
@@ -225,5 +283,15 @@ class LightEngine {
         return t * t * (3f - 2f * t)
     }
 
+    private fun breathingBrightness(phase: Float): Float {
+        val sinusoidal = ((1f - cos(phase.toRadians()).toFloat()) / 2f).coerceIn(0f, 1f)
+        val corrected = sinusoidal.pow(1.85f)
+        return (0.02f + corrected * 0.98f).coerceIn(0f, 1f)
+    }
+
     private fun Float.toRadians(): Double = this / 180.0 * PI
+
+    private companion object {
+        const val GravitySamplesPerAxis = 5
+    }
 }

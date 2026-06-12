@@ -21,6 +21,8 @@ import com.example.rgbcontrller.domain.model.AppSettings
 import com.example.rgbcontrller.domain.model.ConnectionStatus
 import com.example.rgbcontrller.domain.model.DeviceInfo
 import com.example.rgbcontrller.domain.model.Keyframe
+import com.example.rgbcontrller.domain.model.KeyframePreset
+import com.example.rgbcontrller.domain.model.LedMatrix
 import com.example.rgbcontrller.domain.model.LightEffect
 import com.example.rgbcontrller.domain.model.LightSessionState
 import com.example.rgbcontrller.domain.model.LiveControl
@@ -64,8 +66,11 @@ class MockLightRepository(
     private var activeEffect: LightEffect? = MockCatalog.effects.first { it.id == "aurora" }
     private var liveControl = LiveControl(brightness = settingsState.value.defaultBrightness)
     private var keyframes = keyframeStore.load().ifEmpty { MockCatalog.keyframes }
+    private var keyframePresets = keyframeStore.loadPresets()
     private var playback = PlaybackState(isPlaying = true, positionMs = 0)
     private var renderMode = RenderMode.Effect
+    private var effectPositionMs = 0L
+    private var livePositionMs = 0L
 
     private val _session = MutableStateFlow(
         LightSessionState(
@@ -73,8 +78,10 @@ class MockLightRepository(
             matrix = renderMatrix(0),
             activeEffect = activeEffect,
             liveControl = liveControl,
+            brightnessLimit = settingsState.value.masterBrightnessLimit,
             playback = playback,
             keyframes = keyframes,
+            keyframePresets = keyframePresets,
         ),
     )
     override val session: StateFlow<LightSessionState> = _session.asStateFlow()
@@ -86,6 +93,9 @@ class MockLightRepository(
                 delay(FrameDelayMs)
                 val speedScale = 0.25f + settingsState.value.animationSpeed * 1.75f
                 tick += (FrameDelayMs * speedScale).toLong().coerceAtLeast(1L)
+                val effectDelta = (FrameDelayMs * speedScale * effectSpeed(liveControl.speed)).toLong().coerceAtLeast(1L)
+                effectPositionMs += effectDelta
+                livePositionMs += effectDelta
                 playback = playback.copy(
                     positionMs = if (playback.isPlaying) tick else playback.positionMs,
                 )
@@ -94,10 +104,12 @@ class MockLightRepository(
                     matrix = renderMatrix(tick),
                     activeEffect = activeEffect,
                     liveControl = liveControl,
+                    brightnessLimit = settingsState.value.masterBrightnessLimit,
                     playback = playback,
                     keyframes = keyframes,
+                    keyframePresets = keyframePresets,
                 )
-                bluetoothService.sendFrame(_session.value.matrix)
+                bluetoothService.sendFrame(_session.value.matrix.withBrightnessLimit(settingsState.value.masterBrightnessLimit))
             }
         }
     }
@@ -128,22 +140,53 @@ class MockLightRepository(
         renderMode = RenderMode.Editor
     }
 
+    override fun saveKeyframePreset(name: String, keyframes: List<Keyframe>) {
+        if (keyframes.isEmpty()) return
+        val preset = KeyframePreset(
+            id = "preset-${System.currentTimeMillis()}",
+            name = name.ifBlank { "Preset ${keyframePresets.size + 1}" },
+            keyframes = keyframes,
+        )
+        keyframePresets = listOf(preset) + keyframePresets.filterNot { it.name == preset.name }
+        keyframeStore.savePresets(keyframePresets)
+        this.keyframes = keyframes
+        keyframeStore.save(keyframes)
+        activeEffect = null
+        renderMode = RenderMode.Editor
+    }
+
+    override fun deleteKeyframePreset(id: String) {
+        keyframePresets = keyframePresets.filterNot { it.id == id }
+        keyframeStore.savePresets(keyframePresets)
+    }
+
     override fun togglePlayback() {
         playback = playback.copy(isPlaying = !playback.isPlaying)
     }
 
-    private fun renderMatrix(tick: Long) = when (renderMode) {
-        RenderMode.Effect -> engine.render(
-            rows = 2,
-            columns = 4,
-            tick = tick,
-            effect = activeEffect,
-            liveControl = liveControl.copy(brightness = settingsState.value.defaultBrightness),
-            sensorSnapshot = sensorSnapshot.value,
-        )
-        RenderMode.Live -> engine.render(2, 4, tick, null, liveControl, sensorSnapshot.value)
-        RenderMode.Editor -> engine.renderKeyframes(2, 4, playback.positionMs, keyframes)
+    private fun renderMatrix(tick: Long): LedMatrix {
+        return when (renderMode) {
+            RenderMode.Effect -> engine.render(
+                rows = 2,
+                columns = 4,
+                tick = effectPositionMs,
+                effect = activeEffect,
+                liveControl = liveControl.copy(brightness = settingsState.value.defaultBrightness.coerceIn(0f, 1f)),
+                sensorSnapshot = sensorSnapshot.value,
+            )
+            RenderMode.Live -> engine.render(2, 4, livePositionMs, null, liveControl, sensorSnapshot.value)
+            RenderMode.Editor -> engine.renderKeyframes(2, 4, playback.positionMs, keyframes)
+        }
     }
+
+    private fun LedMatrix.withBrightnessLimit(limit: Float): LedMatrix = copy(
+        pixels = pixels.map { pixel ->
+            pixel.copy(
+                brightness = pixel.brightness.coerceIn(0f, limit),
+                glowIntensity = pixel.glowIntensity.coerceIn(0f, limit),
+            )
+        },
+    )
 
     private enum class RenderMode {
         Effect,
@@ -153,12 +196,16 @@ class MockLightRepository(
 
     private companion object {
         const val FrameDelayMs = 34L
+
+        fun effectSpeed(speed: Float): Float = 0.36f + speed.coerceIn(0f, 1f) * 2.25f
     }
 }
 
 interface KeyframeStore {
     fun load(): List<Keyframe>
     fun save(keyframes: List<Keyframe>)
+    fun loadPresets(): List<KeyframePreset> = emptyList()
+    fun savePresets(presets: List<KeyframePreset>) = Unit
 }
 
 class InMemoryKeyframeStore(
@@ -190,9 +237,21 @@ class SharedPreferencesKeyframeStore(
         }
     }
 
+    override fun loadPresets(): List<KeyframePreset> {
+        val encoded = preferences.getString(KeyPresets, null) ?: return emptyList()
+        return KeyframePresetCodec.decode(encoded)
+    }
+
+    override fun savePresets(presets: List<KeyframePreset>) {
+        preferences.edit {
+            putString(KeyPresets, KeyframePresetCodec.encode(presets))
+        }
+    }
+
     private companion object {
         const val KeyframePrefsName = "rgb_controller_keyframes"
         const val KeyKeyframes = "keyframes"
+        const val KeyPresets = "presets"
     }
 }
 
@@ -236,9 +295,44 @@ object KeyframeCodec {
     private fun String.sanitize(): String = replace(FrameSeparator, "_").replace(FieldSeparator, "_")
 }
 
+object KeyframePresetCodec {
+    private const val PresetSeparator = "\n"
+    private const val FieldSeparator = "\t"
+
+    fun encode(presets: List<KeyframePreset>): String {
+        return presets.joinToString(PresetSeparator) { preset ->
+            listOf(
+                preset.id.sanitize(),
+                preset.name.sanitize(),
+                KeyframeCodec.encode(preset.keyframes),
+            ).joinToString(FieldSeparator)
+        }
+    }
+
+    fun decode(value: String): List<KeyframePreset> {
+        if (value.isBlank()) return emptyList()
+        return value.lineSequence()
+            .mapNotNull { encodedPreset ->
+                val fields = encodedPreset.split(FieldSeparator)
+                if (fields.size != 3) return@mapNotNull null
+                val keyframes = KeyframeCodec.decode(fields[2])
+                if (keyframes.isEmpty()) return@mapNotNull null
+                KeyframePreset(
+                    id = fields[0].ifBlank { "preset-${fields[1].hashCode()}" },
+                    name = fields[1].ifBlank { "Preset" },
+                    keyframes = keyframes,
+                )
+            }
+            .toList()
+    }
+
+    private fun String.sanitize(): String = replace(PresetSeparator, " ").replace(FieldSeparator, " ")
+}
+
 class MockDeviceRepository(
     private val bluetoothService: BluetoothService,
     private val deviceState: MutableStateFlow<DeviceInfo> = MutableStateFlow(MockCatalog.device),
+    private val settingsState: StateFlow<AppSettings> = MutableStateFlow(AppSettings()),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : DeviceRepository {
     override val device: StateFlow<DeviceInfo> = deviceState.asStateFlow()
@@ -310,7 +404,7 @@ class MockDeviceRepository(
 
     override fun sendAll(color: RgbColor, brightness: Float) {
         scope.launch {
-            bluetoothService.sendAll(color, brightness)
+            bluetoothService.sendAll(color, brightness.coerceIn(0f, settingsState.value.masterBrightnessLimit.coerceIn(0f, 1f)))
         }
     }
 }
@@ -362,12 +456,13 @@ class AndroidSensorRepository(
     override fun onSensorChanged(event: SensorEvent) {
         when (event.sensor.type) {
             Sensor.TYPE_GRAVITY, Sensor.TYPE_ACCELEROMETER -> {
-                val gravity = Vector3(
+                val measuredGravity = Vector3(
                     x = (event.values.getOrNull(0) ?: 0f) / SensorGravity,
                     y = (event.values.getOrNull(1) ?: SensorGravity) / SensorGravity,
                     z = (event.values.getOrNull(2) ?: 0f) / SensorGravity,
                 )
-                val shake = distance(gravity, lastGravity).coerceIn(0f, 1f)
+                val gravity = smoothGravity(lastGravity, measuredGravity)
+                val shake = distance(measuredGravity, lastGravity).coerceIn(0f, 1f)
                 lastGravity = gravity
                 publish(gravity = gravity, shakeIntensity = shake)
             }
@@ -477,6 +572,14 @@ class AndroidSensorRepository(
         return sqrt(dx * dx + dy * dy + dz * dz)
     }
 
+    private fun smoothGravity(previous: Vector3, next: Vector3): Vector3 {
+        return Vector3(
+            x = previous.x + (next.x - previous.x) * GravitySmoothing,
+            y = previous.y + (next.y - previous.y) * GravitySmoothing,
+            z = previous.z + (next.z - previous.z) * GravitySmoothing,
+        )
+    }
+
     private fun AudioRecord.stopSafely() {
         try {
             if (recordingState == AudioRecord.RECORDSTATE_RECORDING) stop()
@@ -486,6 +589,7 @@ class AndroidSensorRepository(
 
     private companion object {
         const val SensorGravity = 9.80665f
+        const val GravitySmoothing = 0.32f
         const val SampleRate = 16_000
         const val BytesPerSample = 2
         const val MicrophoneGain = 8f
@@ -516,6 +620,10 @@ open class MockSettingsRepository : SettingsRepository {
         update { it.copy(defaultBrightness = value.coerceIn(0f, 1f)) }
     }
 
+    override fun updateMasterBrightnessLimit(value: Float) {
+        update { it.copy(masterBrightnessLimit = value.coerceIn(0f, 1f)) }
+    }
+
     protected open fun update(transform: (AppSettings) -> AppSettings) {
         _settings.value = transform(_settings.value)
     }
@@ -538,6 +646,7 @@ class SharedPreferencesSettingsRepository(
             putBoolean(KeyDeveloperMode, settings.value.developerMode)
             putFloat(KeyAnimationSpeed, settings.value.animationSpeed)
             putFloat(KeyDefaultBrightness, settings.value.defaultBrightness)
+            putFloat(KeyMasterBrightnessLimit, settings.value.masterBrightnessLimit)
         }
     }
 
@@ -549,6 +658,7 @@ class SharedPreferencesSettingsRepository(
             developerMode = getBoolean(KeyDeveloperMode, defaults.developerMode),
             animationSpeed = getFloat(KeyAnimationSpeed, defaults.animationSpeed).coerceIn(0f, 1f),
             defaultBrightness = getFloat(KeyDefaultBrightness, defaults.defaultBrightness).coerceIn(0f, 1f),
+            masterBrightnessLimit = getFloat(KeyMasterBrightnessLimit, defaults.masterBrightnessLimit).coerceIn(0f, 1f),
         )
     }
 
@@ -559,6 +669,7 @@ class SharedPreferencesSettingsRepository(
         const val KeyDeveloperMode = "developer_mode"
         const val KeyAnimationSpeed = "animation_speed"
         const val KeyDefaultBrightness = "default_brightness"
+        const val KeyMasterBrightnessLimit = "master_brightness_limit"
     }
 }
 
@@ -587,7 +698,7 @@ object AppContainer {
             sensorSnapshot = sensorRepository.snapshot,
             keyframeStore = SharedPreferencesKeyframeStore(context),
         )
-        deviceRepository = MockDeviceRepository(bluetoothService, sharedDeviceState)
+        deviceRepository = MockDeviceRepository(bluetoothService, sharedDeviceState, settingsRepository.settings)
     }
 
     fun setMicrophoneEnabled(enabled: Boolean) {

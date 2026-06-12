@@ -41,16 +41,20 @@ import com.example.rgbcontrller.data.mock.AppContainer
 import com.example.rgbcontrller.domain.model.ConnectionStatus
 import com.example.rgbcontrller.domain.model.RgbColor
 import com.example.rgbcontrller.domain.repository.DeviceRepository
+import com.example.rgbcontrller.domain.repository.SettingsRepository
 import com.example.rgbcontrller.presentation.ui.components.AuroraBackground
 import com.example.rgbcontrller.presentation.ui.components.DeviceStatusHeader
+import com.example.rgbcontrller.presentation.ui.components.ExpressiveSlider
 import com.example.rgbcontrller.presentation.ui.components.PageTitle
 
 class DeviceViewModel(
     private val deviceRepository: DeviceRepository = AppContainer.deviceRepository,
+    private val settingsRepository: SettingsRepository = AppContainer.settingsRepository,
 ) : ViewModel() {
     val device = deviceRepository.device
     val discoveredDevices = deviceRepository.discoveredDevices
     val statusMessage = deviceRepository.statusMessage
+    val settings = settingsRepository.settings
 
     fun scan() {
         deviceRepository.scan()
@@ -71,6 +75,10 @@ class DeviceViewModel(
     fun turnOff() {
         deviceRepository.sendAll(RgbColor(0, 0, 0), 0f)
     }
+
+    fun updateBrightnessLimit(value: Float) {
+        settingsRepository.updateMasterBrightnessLimit(value)
+    }
 }
 
 @Composable
@@ -83,6 +91,7 @@ fun DeviceScreen(
     val device by viewModel.device.collectAsState()
     val devices by viewModel.discoveredDevices.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+    val settings by viewModel.settings.collectAsState()
     val isSearching = device.connectionStatus == ConnectionStatus.Searching
     val isConnected = device.connectionStatus == ConnectionStatus.Connected
     AuroraBackground(modifier.fillMaxSize()) {
@@ -106,6 +115,22 @@ fun DeviceScreen(
                 }
                 item {
                     DeviceStatusHeader(device, onClick = onOpenSettings)
+                }
+                item {
+                    WhiteCard {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ExpressiveSlider(
+                                label = "Max brightness",
+                                value = settings.masterBrightnessLimit,
+                                onValueChange = viewModel::updateBrightnessLimit,
+                            )
+                            Text(
+                                "Home, Live, Editor, and test commands stay within this device limit.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                 }
                 item {
                     WhiteCard {
